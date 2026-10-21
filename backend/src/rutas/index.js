@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { obtenerSalud } from '../servicios/salud.js';
 import rutasAutenticacion from './autenticacion.js';
 import rutasUsuarios from './usuarios.js';
+import rutasCarpetas from './carpetas.js';
 
 /** Todas las rutas de la API; app.js las monta bajo /api. */
 const router = Router();
@@ -15,5 +16,6 @@ router.get('/salud', async (_req, res) => {
 
 router.use('/auth', rutasAutenticacion);
 router.use('/usuarios', rutasUsuarios);
+router.use('/carpetas', rutasCarpetas);
 
 export default router;
