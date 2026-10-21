@@ -73,6 +73,15 @@ export async function leerContenido(gridfsId) {
   return Buffer.concat(partes);
 }
 
+/**
+ * Cambia el `filename` de contenido.files, para que coincida con el nombre
+ * visible del archivo al renombrarlo (igual que hace el seed). Los chunks no
+ * se tocan: el contenido es el mismo.
+ */
+export async function renombrarContenido(gridfsId, nombreNuevo) {
+  await obtenerBucket().rename(gridfsId, nombreNuevo);
+}
+
 /** Borra el documento de contenido.files y todos sus chunks. */
 export async function eliminarContenido(gridfsId) {
   await obtenerBucket().delete(gridfsId);

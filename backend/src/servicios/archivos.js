@@ -1,8 +1,15 @@
 import { Archivo, Carpeta, MIME_POR_EXTENSION, Usuario } from '../modelos/index.js';
-import { abrirDescarga, eliminarContenido, existeContenido, leerContenido, subirContenido } from '../config/gridfs.js';
+import {
+  abrirDescarga,
+  eliminarContenido,
+  existeContenido,
+  leerContenido,
+  renombrarContenido,
+  subirContenido,
+} from '../config/gridfs.js';
 import { ErrorApi, ErrorNoEncontrado, ErrorValidacion } from '../utilidades/errores.js';
 import { extensionDe, formatearBytes } from '../utilidades/formato.js';
-import { exigirObjectId } from '../utilidades/validacion.js';
+import { exigirObjectId, exigirObjeto, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
 import { registrarActividad } from './actividad.js';
 import { ubicacionDentroDe, validarNombreLibre } from './arbol.js';
 import { exigirConsulta, exigirPropietario } from './permisos.js';
@@ -192,4 +199,95 @@ export async function prepararDescarga(id, usuario) {
 export async function leerTexto(id, usuario) {
   const archivo = await archivoConContenido(id, usuario);
   return { archivo, texto: (await leerContenido(archivo.gridfsId)).toString('utf8') };
+}
+
+/**
+ * PATCH /api/archivos/:id — { nombre }
+ *
+ * La extension no puede cambiar: renombrar no convierte un .md en .txt, y
+ * cambiarla dejaria `extension` y `mimeType` contando otra cosa que el
+ * contenido real (y alteraria los reportes por tipo).
+ */
+export async function renombrarArchivo(id, cuerpo, usuario) {
+  exigirObjeto(cuerpo);
+  rechazarCamposDesconocidos(cuerpo, ['nombre']);
+  const { nombre, extension } = validarNombreArchivo(cuerpo.nombre);
+  const archivo = await buscarArchivoActivo(id);
+  exigirPropietario(archivo, usuario, 'renombrar este archivo');
+
+  if (extension !== archivo.extension) {
+    throw new ErrorValidacion('No se puede cambiar la extensión del archivo', `Debe seguir terminando en .${archivo.extension}`);
+  }
+  if (nombre === archivo.nombre) return metadatos(archivo);
+  await validarNombreLibre(Archivo, 'carpetaId', {
+    propietarioId: archivo.propietarioId,
+    padreId: archivo.carpetaId,
+    nombre,
+    excluirId: archivo._id,
+  });
+
+  const anterior = archivo.nombre;
+  archivo.nombre = nombre;
+  await archivo.save();
+
+  // El filename de GridFS es solo informativo (la aplicacion siempre llega
+  // al contenido por gridfsId), asi que si este paso fallara el renombrado
+  // sigue siendo valido: se deja constancia y no se revierte.
+  await renombrarContenido(archivo.gridfsId, nombre).catch((e) =>
+    console.error(`[archivos] No se pudo renombrar en GridFS ${archivo.gridfsId}: ${e.message}`)
+  );
+
+  await registrarActividad({
+    usuarioId: usuario._id,
+    accion: 'RENOMBRAR',
+    recursoTipo: 'ARCHIVO',
+    recursoId: archivo._id,
+    recursoNombre: nombre,
+    detalle: `De "${anterior}" a "${nombre}"`,
+  });
+  return metadatos(archivo);
+}
+
+/**
+ * PATCH /api/archivos/:id/mover — { carpetaId } (null = a la raiz)
+ *
+ * A diferencia de una carpeta, un archivo no tiene descendientes: basta con
+ * recalcular su `carpetaId` y su `ancestros` (los de la carpeta destino mas
+ * la carpeta). El contenido en GridFS no se toca: mover es cambiar metadatos.
+ */
+export async function moverArchivo(id, cuerpo, usuario) {
+  exigirObjeto(cuerpo);
+  rechazarCamposDesconocidos(cuerpo, ['carpetaId']);
+  if (!('carpetaId' in cuerpo)) {
+    throw new ErrorValidacion('El campo "carpetaId" es obligatorio', 'Usa null para mover a la raíz');
+  }
+
+  const archivo = await buscarArchivoActivo(id);
+  exigirPropietario(archivo, usuario, 'mover este archivo');
+  const destino = await buscarCarpetaDestino(cuerpo.carpetaId, usuario);
+
+  // Ya esta ahi: nada que hacer ni registrar.
+  if (String(archivo.carpetaId ?? null) === String(destino?._id ?? null)) return metadatos(archivo);
+
+  await validarNombreLibre(Archivo, 'carpetaId', {
+    propietarioId: archivo.propietarioId,
+    padreId: destino?._id,
+    nombre: archivo.nombre,
+    excluirId: archivo._id,
+  });
+
+  const origen = archivo.carpetaId ? await Carpeta.findById(archivo.carpetaId, { ruta: 1 }) : null;
+  archivo.carpetaId = destino?._id ?? null;
+  archivo.ancestros = ubicacionDentroDe(destino, archivo.nombre).ancestros;
+  await archivo.save();
+
+  await registrarActividad({
+    usuarioId: usuario._id,
+    accion: 'MOVER',
+    recursoTipo: 'ARCHIVO',
+    recursoId: archivo._id,
+    recursoNombre: archivo.nombre,
+    detalle: `De ${origen?.ruta ?? 'la raíz'} a ${destino?.ruta ?? 'la raíz'}`,
+  });
+  return metadatos(archivo);
 }

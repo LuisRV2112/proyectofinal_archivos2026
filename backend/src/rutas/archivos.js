@@ -2,7 +2,14 @@ import { Router } from 'express';
 import { pipeline } from 'node:stream/promises';
 import { autenticar } from '../middleware/autenticacion.js';
 import { recibirArchivo } from '../middleware/subida.js';
-import { leerTexto, obtenerArchivo, prepararDescarga, subirArchivo } from '../servicios/archivos.js';
+import {
+  leerTexto,
+  moverArchivo,
+  obtenerArchivo,
+  prepararDescarga,
+  renombrarArchivo,
+  subirArchivo,
+} from '../servicios/archivos.js';
 
 const router = Router();
 
@@ -35,6 +42,16 @@ router.get('/:id/descargar', async (req, res) => {
 router.get('/:id/contenido', async (req, res) => {
   const { texto } = await leerTexto(req.params.id, req.usuario);
   res.type('text/plain; charset=utf-8').set('Content-Disposition', 'inline').send(texto);
+});
+
+// Body: { nombre } — misma extension
+router.patch('/:id', async (req, res) => {
+  res.json(await renombrarArchivo(req.params.id, req.body, req.usuario));
+});
+
+// Body: { carpetaId } — null para mover a la raiz
+router.patch('/:id/mover', async (req, res) => {
+  res.json(await moverArchivo(req.params.id, req.body, req.usuario));
 });
 
 export default router;
