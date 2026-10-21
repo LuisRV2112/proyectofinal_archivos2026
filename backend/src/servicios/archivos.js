@@ -12,7 +12,7 @@ import { extensionDe, formatearBytes } from '../utilidades/formato.js';
 import { exigirObjectId, exigirObjeto, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
 import { registrarActividad } from './actividad.js';
 import { ubicacionDentroDe, validarNombreLibre } from './arbol.js';
-import { exigirConsulta, exigirPropietario } from './permisos.js';
+import { describirAcceso, exigirNivel, exigirPropietario } from './permisos.js';
 
 const NO_ELIMINADO = { 'eliminado.estado': false };
 const MAXIMO_ETIQUETAS = 10;
@@ -151,25 +151,29 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
   return metadatos(archivo);
 }
 
-/** GET /api/archivos/:id — metadatos, con la ruta legible de su carpeta. */
+/**
+ * GET /api/archivos/:id — metadatos, con la ruta legible de su carpeta y el
+ * nivel de acceso del usuario (el cliente lo usa para mostrar u ocultar
+ * acciones como renombrar).
+ */
 export async function obtenerArchivo(id, usuario) {
   const archivo = await buscarArchivoActivo(id);
-  exigirConsulta(archivo, usuario);
+  const acceso = await exigirNivel(archivo, usuario, 'LECTURA');
   const carpeta = archivo.carpetaId ? await Carpeta.findById(archivo.carpetaId, { ruta: 1 }) : null;
-  return { ...metadatos(archivo), ubicacion: carpeta?.ruta ?? '/' };
+  return { ...metadatos(archivo), ubicacion: carpeta?.ruta ?? '/', acceso };
 }
 
-/** Archivo accesible y con su contenido presente en GridFS. */
+/** Archivo legible por el usuario y con su contenido presente en GridFS. */
 async function archivoConContenido(id, usuario) {
   const archivo = await buscarArchivoActivo(id);
-  exigirConsulta(archivo, usuario);
+  const acceso = await exigirNivel(archivo, usuario, 'LECTURA');
   if (!(await existeContenido(archivo.gridfsId))) {
     // No deberia pasar nunca: indica una inconsistencia entre la coleccion y
     // GridFS. Se reporta como error del servidor, no del cliente.
     console.error(`[archivos] ${archivo._id} apunta a un contenido inexistente (${archivo.gridfsId})`);
     throw new ErrorApi(500, 'El contenido del archivo no está disponible');
   }
-  return archivo;
+  return { archivo, acceso };
 }
 
 /**
@@ -179,14 +183,15 @@ async function archivoConContenido(id, usuario) {
  * responder.
  */
 export async function prepararDescarga(id, usuario) {
-  const archivo = await archivoConContenido(id, usuario);
+  const { archivo, acceso } = await archivoConContenido(id, usuario);
   await registrarActividad({
     usuarioId: usuario._id,
     accion: 'DESCARGAR',
     recursoTipo: 'ARCHIVO',
     recursoId: archivo._id,
     recursoNombre: archivo.nombre,
-    detalle: archivo.propietarioId.equals(usuario._id) ? 'Descargado como propietario' : 'Descargado como administrador',
+    // Queda registrado por que via accedio: auditable si luego se revoca.
+    detalle: `Descargado ${describirAcceso(acceso)}`,
   });
   return { archivo, flujo: abrirDescarga(archivo.gridfsId) };
 }
@@ -197,7 +202,7 @@ export async function prepararDescarga(id, usuario) {
  * aplicacion, y contarlo inflaria el historial y los reportes de descargas.
  */
 export async function leerTexto(id, usuario) {
-  const archivo = await archivoConContenido(id, usuario);
+  const { archivo } = await archivoConContenido(id, usuario);
   return { archivo, texto: (await leerContenido(archivo.gridfsId)).toString('utf8') };
 }
 
@@ -213,7 +218,8 @@ export async function renombrarArchivo(id, cuerpo, usuario) {
   rechazarCamposDesconocidos(cuerpo, ['nombre']);
   const { nombre, extension } = validarNombreArchivo(cuerpo.nombre);
   const archivo = await buscarArchivoActivo(id);
-  exigirPropietario(archivo, usuario, 'renombrar este archivo');
+  // Renombrar lo puede hacer tambien quien tenga EDICION (directa o heredada).
+  await exigirNivel(archivo, usuario, 'EDICION');
 
   if (extension !== archivo.extension) {
     throw new ErrorValidacion('No se puede cambiar la extensión del archivo', `Debe seguir terminando en .${archivo.extension}`);

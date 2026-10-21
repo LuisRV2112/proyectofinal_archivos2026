@@ -1,7 +1,7 @@
 import { Archivo, Carpeta, EXTENSIONES_PERMITIDAS } from '../modelos/index.js';
-import { ErrorNoEncontrado, ErrorProhibido, ErrorValidacion } from '../utilidades/errores.js';
+import { ErrorNoEncontrado, ErrorValidacion } from '../utilidades/errores.js';
 import { exigirObjectId, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
-import { exigirConsulta } from './permisos.js';
+import { carpetasCompartidasCon, exigirNivel } from './permisos.js';
 
 const PARAMETROS = ['texto', 'extension', 'carpetaId', 'enSubarbol', 'desde', 'hasta', 'propietarioId', 'pagina', 'limite'];
 const LIMITE_POR_DEFECTO = 50;
@@ -50,7 +50,7 @@ function leerBooleano(valor, campo) {
  *   carpetaId      solo los archivos directos de esa carpeta...
  *   enSubarbol     ...o, con true, tambien los de todas sus subcarpetas
  *   desde, hasta   rango sobre creadoEn
- *   propietarioId  solo administrador
+ *   propietarioId  solo los de ese propietario (dentro de lo accesible)
  *   pagina, limite paginacion
  *
  * Cada filtro se traduce a una condicion sobre un campo indexado, y MongoDB
@@ -62,17 +62,23 @@ export async function buscarArchivos(consulta, usuario) {
   // Siempre: nada de la papelera.
   const filtro = { 'eliminado.estado': false };
 
-  // Alcance segun permisos. Por ahora (Fase 4) un usuario solo busca entre
-  // sus archivos; el administrador entre todos, o los de un usuario. La Fase
-  // 5 sumara aqui lo compartido con el usuario.
-  if (usuario.rol === 'ADMINISTRADOR') {
-    if (consulta.propietarioId !== undefined) filtro.propietarioId = exigirObjectId(consulta.propietarioId, 'propietarioId');
-  } else {
-    if (consulta.propietarioId !== undefined && !exigirObjectId(consulta.propietarioId, 'propietarioId').equals(usuario._id)) {
-      throw new ErrorProhibido('Solo un administrador puede buscar en los archivos de otro usuario');
-    }
-    filtro.propietarioId = usuario._id;
+  // Alcance segun permisos: un usuario busca entre lo que puede LEER, que es
+  // la union de las vias de acceso de la regla 5.2:
+  //   - lo suyo                                  {propietarioId: yo}
+  //   - lo compartido directamente con el        {"compartidoCon.usuarioId": yo}
+  //   - lo que esta dentro de una carpeta que le
+  //     compartieron (herencia)                  {ancestros: {$in: [esas carpetas]}}
+  // Las tres ramas del $or usan un indice cada una, requisito de MongoDB para
+  // combinar $or con una busqueda $text. El administrador busca entre todo.
+  if (usuario.rol !== 'ADMINISTRADOR') {
+    const compartidas = await carpetasCompartidasCon(usuario);
+    filtro.$or = [
+      { propietarioId: usuario._id },
+      { 'compartidoCon.usuarioId': usuario._id },
+      ...(compartidas.length ? [{ ancestros: { $in: compartidas.map((c) => c._id) } }] : []),
+    ];
   }
+  if (consulta.propietarioId !== undefined) filtro.propietarioId = exigirObjectId(consulta.propietarioId, 'propietarioId');
 
   // Busqueda por texto con el indice {nombre: "text", etiquetas: "text"} en
   // espanol: busca PALABRAS completas (con raices: "contratos" encuentra
@@ -96,7 +102,7 @@ export async function buscarArchivos(consulta, usuario) {
   if (consulta.carpetaId !== undefined) {
     const carpeta = await Carpeta.findOne({ _id: exigirObjectId(consulta.carpetaId, 'carpetaId'), 'eliminado.estado': false });
     if (!carpeta) throw new ErrorNoEncontrado('Carpeta no encontrada', 'No existe o está en la papelera');
-    exigirConsulta(carpeta, usuario);
+    await exigirNivel(carpeta, usuario, 'LECTURA');
 
     // Aqui se ve la ventaja de Array of Ancestors: "todo lo que esta debajo
     // de X, a cualquier profundidad" es una igualdad sobre un array

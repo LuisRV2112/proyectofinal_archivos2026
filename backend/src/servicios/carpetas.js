@@ -3,7 +3,7 @@ import { ErrorNoEncontrado, ErrorProhibido, ErrorValidacion } from '../utilidade
 import { exigirObjectId, exigirObjeto, exigirTexto, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
 import { registrarActividad } from './actividad.js';
 import { COLACION_NOMBRES, reubicarSubarbol, ubicacionDentroDe, validarNombreLibre } from './arbol.js';
-import { exigirConsulta, exigirPropietario } from './permisos.js';
+import { exigirNivel, exigirPropietario } from './permisos.js';
 
 // Los listados nunca muestran lo que esta en la papelera (regla 5.3). Usa el
 // indice {"eliminado.estado": 1}.
@@ -41,8 +41,10 @@ function validarNombre(valor) {
 async function leerDestino(padreId, usuario) {
   if (padreId === null || padreId === undefined) return null;
   const padre = await buscarCarpetaActiva(padreId, 'padreId');
-  // Solo dentro de carpetas propias: el arbol de cada usuario es suyo. (Con
-  // la Fase 5, un permiso de EDICION podria abrir esta puerta.)
+  // Solo dentro de carpetas propias, aunque se tenga EDICION: lo creado
+  // dentro tendria otro propietario que la carpeta, ocuparia el espacio de
+  // quien lo sube en el arbol de otro, y el propietario de la carpeta no
+  // podria moverlo ni eliminarlo. El arbol de cada usuario es solo suyo.
   exigirPropietario(padre, usuario, 'crear o mover elementos dentro de esta carpeta');
   return padre;
 }
@@ -81,30 +83,39 @@ export async function listarRaiz(usuario, consulta = {}) {
 }
 
 /**
- * GET /api/carpetas/:id — la carpeta, su contenido directo y la ruta de
- * migas.
+ * GET /api/carpetas/:id — la carpeta, su contenido directo, la ruta de migas
+ * y el nivel de acceso del usuario (para que el cliente sepa que mostrar).
  *
  * Las migas salen de `ancestros`: ya estan en el documento, ordenados de la
  * raiz hacia abajo, asi que basta UNA consulta por _id (indice _id) para leer
  * sus nombres, sin recorrer el arbol hacia arriba padre por padre.
+ *
+ * El contenido se lista por el propietario de la carpeta: quien entra por un
+ * permiso compartido ve todo lo que hay dentro (herencia), no solo lo suyo.
  */
 export async function obtenerCarpeta(id, usuario) {
   const carpeta = await buscarCarpetaActiva(id);
-  exigirConsulta(carpeta, usuario);
+  const acceso = await exigirNivel(carpeta, usuario, 'LECTURA');
 
   const [ancestros, contenido] = await Promise.all([
-    Carpeta.find({ _id: { $in: carpeta.ancestros } }, { nombre: 1, ruta: 1 }).lean(),
+    Carpeta.find({ _id: { $in: carpeta.ancestros } }, { nombre: 1, ruta: 1, 'compartidoCon.usuarioId': 1 }).lean(),
     contenidoDe(carpeta.propietarioId, carpeta._id),
   ]);
 
   // $in no respeta el orden del array: se reordena segun `ancestros`.
   const porId = new Map(ancestros.map((a) => [String(a._id), a]));
-  const migas = [
-    ...carpeta.ancestros.map((aid) => porId.get(String(aid))).filter(Boolean),
-    { _id: carpeta._id, nombre: carpeta.nombre, ruta: carpeta.ruta },
-  ];
+  let cadena = carpeta.ancestros.map((aid) => porId.get(String(aid))).filter(Boolean);
 
-  return { carpeta, migas, ...contenido };
+  // Quien entra por un permiso compartido solo ve las migas desde la carpeta
+  // mas alta que le compartieron: las de mas arriba son del arbol privado del
+  // propietario y no tiene acceso a ellas.
+  if (acceso.via === 'directo' || acceso.via === 'heredado') {
+    const primera = cadena.findIndex((a) => a.compartidoCon?.some((p) => p.usuarioId.equals(usuario._id)));
+    cadena = primera === -1 ? [] : cadena.slice(primera);
+  }
+  const migas = [...cadena, carpeta].map(({ _id, nombre, ruta }) => ({ _id, nombre, ruta }));
+
+  return { carpeta, acceso, migas, ...contenido };
 }
 
 /** POST /api/carpetas — { nombre, padreId? } */
@@ -149,7 +160,8 @@ export async function renombrarCarpeta(id, cuerpo, usuario) {
   rechazarCamposDesconocidos(cuerpo, ['nombre']);
   const nombre = validarNombre(cuerpo.nombre);
   const carpeta = await buscarCarpetaActiva(id);
-  exigirPropietario(carpeta, usuario, 'renombrar esta carpeta');
+  // Renombrar lo puede hacer tambien quien tenga EDICION (directa o heredada).
+  await exigirNivel(carpeta, usuario, 'EDICION');
 
   if (nombre === carpeta.nombre) return { carpeta, reubicados: 0 };
   await validarNombreLibre(Carpeta, 'padreId', {
