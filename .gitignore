@@ -1,0 +1,25 @@
+# Dependencias de Node
+node_modules/
+
+# Compilación de Angular
+dist/
+.angular/
+
+# Variables de entorno: contienen la clave JWT y la cadena de conexión.
+# Se sube .env.ejemplo como plantilla, nunca el .env real.
+.env
+.env.*
+!.env.ejemplo
+
+# Editores
+.idea/
+.vscode/
+*.iml
+
+# Sistema y logs
+*.log
+.DS_Store
+
+# Instrucciones de trabajo locales: no forman parte de la entrega
+CLAUDE.md
+fases/
