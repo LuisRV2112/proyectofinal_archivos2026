@@ -11,6 +11,7 @@ import {
   subirArchivo,
 } from '../servicios/archivos.js';
 import { buscarArchivos } from '../servicios/busqueda.js';
+import { enviarArchivoAPapelera } from '../servicios/papelera.js';
 
 const router = Router();
 
@@ -58,6 +59,11 @@ router.patch('/:id', async (req, res) => {
 // Body: { carpetaId } — null para mover a la raiz
 router.patch('/:id/mover', async (req, res) => {
   res.json(await moverArchivo(req.params.id, req.body, req.usuario));
+});
+
+// A la papelera (no borra; ver servicios/papelera.js)
+router.delete('/:id', async (req, res) => {
+  res.json(await enviarArchivoAPapelera(req.params.id, req.usuario));
 });
 
 export default router;

@@ -133,3 +133,23 @@ export async function reubicarSubarbol(carpeta, { padreId, ancestrosNuevos, ruta
 
   return subcarpetas.length + archivos.length;
 }
+
+/**
+ * Devuelve `nombre` si esta libre entre los hermanos, o la primera variante
+ * libre "nombre (2).ext", "nombre (3).ext"... Se usa al RESTAURAR: mientras
+ * algo estaba en la papelera, otro elemento pudo ocupar su nombre, y
+ * rechazar la restauracion dejaria al usuario sin forma de recuperarlo (no
+ * puede renombrar algo que esta en la papelera).
+ */
+export async function primerNombreLibre(Modelo, campoPadre, { propietarioId, padreId, nombre, excluirId = null }) {
+  const punto = Modelo === Archivo ? nombre.lastIndexOf('.') : -1;
+  const base = punto > 0 ? nombre.slice(0, punto) : nombre;
+  const extension = punto > 0 ? nombre.slice(punto) : '';
+
+  for (let n = 1; ; n++) {
+    const candidato = n === 1 ? nombre : `${base} (${n})${extension}`;
+    const filtro = { propietarioId, [campoPadre]: padreId ?? null, nombre: candidato, 'eliminado.estado': false };
+    if (excluirId) filtro._id = { $ne: excluirId };
+    if (!(await Modelo.exists(filtro).collation(COLACION_NOMBRES))) return candidato;
+  }
+}

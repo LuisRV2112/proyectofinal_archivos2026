@@ -7,6 +7,7 @@ import {
   obtenerCarpeta,
   renombrarCarpeta,
 } from '../servicios/carpetas.js';
+import { enviarCarpetaAPapelera } from '../servicios/papelera.js';
 
 const router = Router();
 
@@ -34,6 +35,11 @@ router.patch('/:id', async (req, res) => {
 // Body: { padreId } — null para mover a la raiz
 router.patch('/:id/mover', async (req, res) => {
   res.json(await moverCarpeta(req.params.id, req.body, req.usuario));
+});
+
+// A la papelera junto con todo su subarbol
+router.delete('/:id', async (req, res) => {
+  res.json(await enviarCarpetaAPapelera(req.params.id, req.usuario));
 });
 
 export default router;
