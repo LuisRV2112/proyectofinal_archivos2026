@@ -10,6 +10,7 @@ import {
   renombrarArchivo,
   subirArchivo,
 } from '../servicios/archivos.js';
+import { buscarArchivos } from '../servicios/busqueda.js';
 
 const router = Router();
 
@@ -18,6 +19,11 @@ router.use(autenticar);
 // multipart/form-data: archivo (obligatorio), carpetaId y etiquetas (opcionales)
 router.post('/', recibirArchivo, async (req, res) => {
   res.status(201).json(await subirArchivo(req.file, req.body, req.usuario));
+});
+
+// Antes de /:id, para que "buscar" no se tome como un id.
+router.get('/buscar', async (req, res) => {
+  res.json(await buscarArchivos(req.query, req.usuario));
 });
 
 router.get('/:id', async (req, res) => {
