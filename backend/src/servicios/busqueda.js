@@ -1,46 +1,10 @@
 import { Archivo, Carpeta, EXTENSIONES_PERMITIDAS } from '../modelos/index.js';
 import { ErrorNoEncontrado, ErrorValidacion } from '../utilidades/errores.js';
 import { exigirObjectId, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
+import { leerBooleano, leerPaginacion, leerRangoFechas } from '../utilidades/consultas.js';
 import { carpetasCompartidasCon, exigirNivel } from './permisos.js';
 
 const PARAMETROS = ['texto', 'extension', 'carpetaId', 'enSubarbol', 'desde', 'hasta', 'propietarioId', 'pagina', 'limite'];
-const LIMITE_POR_DEFECTO = 50;
-const LIMITE_MAXIMO = 200;
-
-// Guatemala no tiene horario de verano: una fecha sin hora ("2026-05-01") se
-// interpreta como el dia completo en hora local, no en UTC. Si no, un
-// archivo subido el 30 de abril a las 19:00 (01:00 UTC del 1 de mayo)
-// apareceria en el dia equivocado.
-const DESFASE_LOCAL = '-06:00';
-const SOLO_FECHA = /^\d{4}-\d{2}-\d{2}$/;
-
-/** "2026-05-01" -> inicio (o fin) de ese dia en hora local; ISO completo tal cual. */
-function leerFecha(valor, campo, finDelDia) {
-  const texto = String(valor);
-  const fecha = SOLO_FECHA.test(texto)
-    ? new Date(`${texto}T${finDelDia ? '23:59:59.999' : '00:00:00.000'}${DESFASE_LOCAL}`)
-    : new Date(texto);
-  if (Number.isNaN(fecha.getTime())) {
-    throw new ErrorValidacion(`La fecha "${campo}" no es válida`, 'Usa el formato AAAA-MM-DD o una fecha ISO 8601');
-  }
-  return fecha;
-}
-
-function leerEntero(valor, campo, { minimo, maximo, defecto }) {
-  if (valor === undefined) return defecto;
-  const numero = Number(valor);
-  if (!Number.isInteger(numero) || numero < minimo || numero > maximo) {
-    throw new ErrorValidacion(`"${campo}" debe ser un entero entre ${minimo} y ${maximo}`);
-  }
-  return numero;
-}
-
-function leerBooleano(valor, campo) {
-  if (valor === undefined) return false;
-  if (valor === 'true') return true;
-  if (valor === 'false') return false;
-  throw new ErrorValidacion(`"${campo}" debe ser true o false`);
-}
 
 /**
  * GET /api/archivos/buscar — filtros combinables (todos opcionales):
@@ -114,17 +78,10 @@ export async function buscarArchivos(consulta, usuario) {
     throw new ErrorValidacion('"enSubarbol" requiere "carpetaId"');
   }
 
-  if (consulta.desde !== undefined || consulta.hasta !== undefined) {
-    filtro.creadoEn = {};
-    if (consulta.desde !== undefined) filtro.creadoEn.$gte = leerFecha(consulta.desde, 'desde', false);
-    if (consulta.hasta !== undefined) filtro.creadoEn.$lte = leerFecha(consulta.hasta, 'hasta', true);
-    if (filtro.creadoEn.$gte && filtro.creadoEn.$lte && filtro.creadoEn.$gte > filtro.creadoEn.$lte) {
-      throw new ErrorValidacion('"desde" no puede ser posterior a "hasta"');
-    }
-  }
+  const rangoFechas = leerRangoFechas(consulta);
+  if (rangoFechas) filtro.creadoEn = rangoFechas;
 
-  const pagina = leerEntero(consulta.pagina, 'pagina', { minimo: 1, maximo: 10_000, defecto: 1 });
-  const limite = leerEntero(consulta.limite, 'limite', { minimo: 1, maximo: LIMITE_MAXIMO, defecto: LIMITE_POR_DEFECTO });
+  const { pagina, limite } = leerPaginacion(consulta);
 
   // Con texto, primero lo mas relevante (puntaje del indice de texto); sin
   // texto, lo mas reciente (indice {creadoEn: -1}).
