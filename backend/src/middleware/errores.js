@@ -1,5 +1,8 @@
 import mongoose from 'mongoose';
+import multer from 'multer';
 import { ErrorApi, ErrorNoEncontrado } from '../utilidades/errores.js';
+import { formatearBytes } from '../utilidades/formato.js';
+import { TAMANO_MAXIMO_BYTES } from './subida.js';
 
 /** Cualquier ruta que no exista bajo /api responde 404 en el mismo formato. */
 export function rutaNoEncontrada(req, _res, next) {
@@ -29,6 +32,16 @@ function normalizar(error) {
   if (error?.code === 11000) {
     const campo = Object.keys(error.keyValue ?? {})[0] ?? 'campo';
     return new ErrorApi(409, `Ya existe un registro con ese ${campo}`, `Valor: ${error.keyValue?.[campo]}`);
+  }
+  // Errores de multer al recibir un archivo (middleware/subida.js).
+  if (error instanceof multer.MulterError) {
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return new ErrorApi(413, 'El archivo supera el tamaño máximo permitido', `Máximo: ${formatearBytes(TAMANO_MAXIMO_BYTES)}`);
+    }
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return new ErrorApi(400, 'Se esperaba un único archivo en el campo "archivo"', `Campo recibido: ${error.field}`);
+    }
+    return new ErrorApi(400, 'Formulario de subida no válido', error.message);
   }
   // Errores de express.json(): JSON mal formado o cuerpo demasiado grande.
   if (error?.type === 'entity.parse.failed') {

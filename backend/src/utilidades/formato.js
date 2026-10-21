@@ -10,3 +10,9 @@ export function formatearBytes(bytes) {
   }
   return `${valor.toFixed(1)} ${unidades[i]}`;
 }
+
+/** "Contrato.Final.MD" -> "md"; "" si no tiene extension. */
+export function extensionDe(nombre) {
+  const punto = nombre.lastIndexOf('.');
+  return punto > 0 ? nombre.slice(punto + 1).toLowerCase() : '';
+}

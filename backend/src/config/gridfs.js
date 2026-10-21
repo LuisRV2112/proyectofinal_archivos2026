@@ -57,6 +57,15 @@ export function abrirDescarga(gridfsId) {
   return obtenerBucket().openDownloadStream(gridfsId);
 }
 
+/**
+ * Comprueba que el contenido exista antes de abrir la descarga. Si faltara,
+ * el stream fallaria recien al leer, cuando la respuesta ya empezo a
+ * enviarse y no se puede responder con un error JSON.
+ */
+export async function existeContenido(gridfsId) {
+  return (await obtenerBucket().find({ _id: gridfsId }, { limit: 1 }).toArray()).length > 0;
+}
+
 /** Lee el contenido completo en memoria (util para scripts y archivos pequenos). */
 export async function leerContenido(gridfsId) {
   const partes = [];
