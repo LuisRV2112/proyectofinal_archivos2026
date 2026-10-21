@@ -4,7 +4,12 @@ const { Schema } = mongoose;
 
 export const ACCIONES = [
   'LOGIN',
+  // Intento de inicio de sesion rechazado (contrasena incorrecta, usuario
+  // inexistente o desactivado). Se registra para poder detectar intentos de
+  // adivinar contrasenas.
+  'LOGIN_FALLIDO',
   'CREAR_USUARIO',
+  'MODIFICAR_USUARIO',
   'ACTIVAR_USUARIO',
   'DESACTIVAR_USUARIO',
   'CREAR_CARPETA',
@@ -35,10 +40,17 @@ export const TIPOS_RECURSO = ['ARCHIVO', 'CARPETA', 'USUARIO'];
  * Las entradas no se modifican nunca despues de crearse (solo se insertan),
  * por eso no hay `actualizadoEn`.
  */
+function esObligatorioSalvoLoginFallido() {
+  return this.accion !== 'LOGIN_FALLIDO';
+}
+
 const esquemaActividad = new Schema(
   {
-    // Quien hizo la operacion.
-    usuarioId: { type: Schema.Types.ObjectId, ref: 'Usuario', required: true },
+    // Quien hizo la operacion. Es la unica entrada que puede no tenerlo: un
+    // LOGIN_FALLIDO con un username que no existe no tiene a quien apuntar,
+    // pero igual interesa registrarlo (el nombre intentado va en
+    // recursoNombre).
+    usuarioId: { type: Schema.Types.ObjectId, ref: 'Usuario', required: esObligatorioSalvoLoginFallido },
     accion: {
       type: String,
       required: true,
@@ -49,7 +61,7 @@ const esquemaActividad = new Schema(
       required: true,
       enum: { values: TIPOS_RECURSO, message: 'Tipo de recurso no valido: {VALUE}' },
     },
-    recursoId: { type: Schema.Types.ObjectId, required: true },
+    recursoId: { type: Schema.Types.ObjectId, required: esObligatorioSalvoLoginFallido },
     // DENORMALIZADO: copia del nombre en el momento de la operacion. Si el
     // recurso se elimina definitivamente, `recursoId` ya no apunta a nada,
     // pero el historial tiene que seguir siendo legible ("Eliminado
