@@ -4,6 +4,8 @@ import rutasAutenticacion from './autenticacion.js';
 import rutasUsuarios from './usuarios.js';
 import rutasCarpetas from './carpetas.js';
 import rutasArchivos from './archivos.js';
+import rutasRecursos from './recursos.js';
+import rutasCompartidos from './compartidos.js';
 
 /** Todas las rutas de la API; app.js las monta bajo /api. */
 const router = Router();
@@ -19,5 +21,7 @@ router.use('/auth', rutasAutenticacion);
 router.use('/usuarios', rutasUsuarios);
 router.use('/carpetas', rutasCarpetas);
 router.use('/archivos', rutasArchivos);
+router.use('/recursos', rutasRecursos);
+router.use('/compartidos', rutasCompartidos);
 
 export default router;
