@@ -8,6 +8,7 @@ import rutasRecursos from './recursos.js';
 import rutasCompartidos from './compartidos.js';
 import rutasPapelera from './papelera.js';
 import rutasReportes from './reportes.js';
+import rutasActividad from './actividad.js';
 
 /** Todas las rutas de la API; app.js las monta bajo /api. */
 const router = Router();
@@ -27,5 +28,6 @@ router.use('/recursos', rutasRecursos);
 router.use('/compartidos', rutasCompartidos);
 router.use('/papelera', rutasPapelera);
 router.use('/reportes', rutasReportes);
+router.use('/actividad', rutasActividad);
 
 export default router;

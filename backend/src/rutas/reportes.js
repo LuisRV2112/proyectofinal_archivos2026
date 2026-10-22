@@ -7,11 +7,19 @@ import {
   recibidosPorUsuario,
   recursosConMasUsuarios,
 } from '../servicios/reportes/comparticion.js';
+import {
+  historialUsuario,
+  operacionesPorPeriodo,
+  operacionesPorTipo,
+  principalesAcciones,
+} from '../servicios/reportes/actividad.js';
 
 /**
  * Reportes (seccion 7 del modelo). Los de archivos y usuarios son solo del
  * administrador (seccion 6). Los de comparticion los usa cualquiera, pero un
- * usuario normal solo ve los propios (el servicio lo restringe).
+ * usuario normal solo ve los propios (el servicio lo restringe). De actividad,
+ * el historial por rango (9) es de cualquiera (el propio); los globales
+ * (10 a 12), solo del administrador.
  */
 const router = Router();
 const soloAdmin = exigirRol('ADMINISTRADOR');
@@ -46,6 +54,20 @@ router.get('/comparticion/compartidos-por', async (req, res) => {
 });
 router.get('/comparticion/recibidos', async (req, res) => {
   res.json(await recibidosPorUsuario(req.query, req.usuario));
+});
+
+// --- Actividad ---
+router.get('/actividad/historial', async (req, res) => {
+  res.json(await historialUsuario(req.query, req.usuario));
+});
+router.get('/actividad/por-tipo', soloAdmin, async (req, res) => {
+  res.json(await operacionesPorTipo(req.query));
+});
+router.get('/actividad/por-periodo', soloAdmin, async (req, res) => {
+  res.json(await operacionesPorPeriodo(req.query));
+});
+router.get('/actividad/principales', soloAdmin, async (req, res) => {
+  res.json(await principalesAcciones(req.query));
 });
 
 export default router;

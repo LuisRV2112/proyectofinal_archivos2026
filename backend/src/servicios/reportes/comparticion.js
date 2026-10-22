@@ -1,9 +1,10 @@
 import { Archivo, Carpeta, Usuario } from '../../modelos/index.js';
-import { ErrorNoEncontrado, ErrorProhibido, ErrorValidacion } from '../../utilidades/errores.js';
+import { ErrorValidacion } from '../../utilidades/errores.js';
 import { etapasPaginacion, leerEntero, leerPaginacion, respuestaPaginada } from '../../utilidades/consultas.js';
-import { exigirObjectId, rechazarCamposDesconocidos } from '../../utilidades/validacion.js';
+import { rechazarCamposDesconocidos } from '../../utilidades/validacion.js';
 import { COLACION_NOMBRES } from '../arbol.js';
 import { etapasPropietario } from './archivos.js';
+import { leerUsuarioObjetivo } from './comun.js';
 
 /**
  * Reportes de COMPARTICION (6 a 8).
@@ -23,21 +24,7 @@ const CARPETAS = Carpeta.collection.name;
 const ARCHIVOS = Archivo.collection.name;
 const TIPOS = ['CARPETA', 'ARCHIVO'];
 
-/**
- * Usuario sobre el que se pide el reporte (?usuarioId). Un usuario normal
- * solo puede pedir el suyo (y es el valor por defecto); el administrador,
- * cualquiera.
- */
-async function leerUsuarioObjetivo(consulta, usuario) {
-  if (consulta.usuarioId === undefined) return usuario;
-  const id = exigirObjectId(consulta.usuarioId, 'usuarioId');
-  if (!id.equals(usuario._id) && usuario.rol !== 'ADMINISTRADOR') {
-    throw new ErrorProhibido('Solo puedes consultar tus propios reportes de compartición');
-  }
-  const objetivo = await Usuario.findById(id, { username: 1, nombreCompleto: 1 });
-  if (!objetivo) throw new ErrorNoEncontrado('Usuario no encontrado');
-  return objetivo;
-}
+const PROHIBIDO = 'Solo puedes consultar tus propios reportes de compartición';
 
 /** ?tipo=CARPETA|ARCHIVO para limitar a una de las dos colecciones. */
 function leerTipo(valor) {
@@ -153,7 +140,7 @@ export async function recursosConMasUsuarios(consulta, usuario) {
  */
 export async function compartidosPorUsuario(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, ['usuarioId', 'tipo', 'pagina', 'limite']);
-  const objetivo = await leerUsuarioObjetivo(consulta, usuario);
+  const objetivo = await leerUsuarioObjetivo(consulta, usuario, PROHIBIDO);
   const tipo = leerTipo(consulta.tipo);
   const paginacion = leerPaginacion(consulta);
 
@@ -182,7 +169,7 @@ export async function compartidosPorUsuario(consulta, usuario) {
  */
 export async function recibidosPorUsuario(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, ['usuarioId', 'tipo', 'pagina', 'limite']);
-  const objetivo = await leerUsuarioObjetivo(consulta, usuario);
+  const objetivo = await leerUsuarioObjetivo(consulta, usuario, PROHIBIDO);
   const tipo = leerTipo(consulta.tipo);
   const paginacion = leerPaginacion(consulta);
 
