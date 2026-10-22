@@ -1,0 +1,30 @@
+<main class="fondo">
+  <form class="tarjeta" [formGroup]="formulario" (ngSubmit)="entrar()">
+    <h1>Gestión Documental</h1>
+    <p class="secundario">Inicia sesión para ver tus documentos</p>
+
+    @if (error()) {
+      <div class="alerta alerta-error" role="alert">{{ error() }}</div>
+    }
+
+    <label class="campo">
+      <span>Usuario</span>
+      <input formControlName="username" autocomplete="username" autofocus />
+      @if (formulario.controls.username.touched && formulario.controls.username.invalid) {
+        <small class="texto-error">Escribe tu usuario</small>
+      }
+    </label>
+
+    <label class="campo">
+      <span>Contraseña</span>
+      <input type="password" formControlName="password" autocomplete="current-password" />
+      @if (formulario.controls.password.touched && formulario.controls.password.invalid) {
+        <small class="texto-error">Escribe tu contraseña</small>
+      }
+    </label>
+
+    <button class="boton boton-primario ancho" type="submit" [disabled]="cargando()">
+      {{ cargando() ? 'Entrando…' : 'Entrar' }}
+    </button>
+  </form>
+</main>

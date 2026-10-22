@@ -1,0 +1,212 @@
+/*
+ * Estilos globales: variables de color y componentes basicos (botones,
+ * campos, tablas, alertas, dialogos) que reutilizan todas las pantallas.
+ * Sencillo a proposito: la fase pide no invertir de mas en diseno.
+ */
+:root {
+  --fondo: #f4f6f9;
+  --superficie: #ffffff;
+  --borde: #dde2ea;
+  --texto: #1f2933;
+  --texto-suave: #6b7785;
+  --primario: #2457c5;
+  --primario-suave: #e6edfb;
+  --peligro: #c0392b;
+  --peligro-suave: #fbeaea;
+  --exito: #1e7d4f;
+  --exito-suave: #e5f5ec;
+  --info-suave: #eef3fb;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 15px;
+  color: var(--texto);
+  background: var(--fondo);
+}
+
+h1 {
+  font-size: 1.4rem;
+  margin: 0 0 16px;
+}
+h2 {
+  font-size: 1.1rem;
+  margin: 0 0 12px;
+}
+
+a {
+  color: var(--primario);
+}
+
+.secundario {
+  color: var(--texto-suave);
+}
+.texto-error {
+  color: var(--peligro);
+}
+
+/* --- Botones --- */
+.boton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+  color: var(--texto);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: none;
+}
+.boton:hover:not(:disabled) {
+  background: var(--fondo);
+}
+.boton:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+.boton-primario {
+  background: var(--primario);
+  border-color: var(--primario);
+  color: #fff;
+}
+.boton-primario:hover:not(:disabled) {
+  background: #1c47a3;
+}
+.boton-peligro {
+  background: var(--peligro);
+  border-color: var(--peligro);
+  color: #fff;
+}
+.boton-peligro:hover:not(:disabled) {
+  background: #a5301f;
+}
+.boton-chico {
+  padding: 3px 9px;
+  font-size: 0.85rem;
+}
+
+/* --- Formularios --- */
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.campo > span {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+input,
+select,
+textarea {
+  font: inherit;
+  padding: 7px 10px;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--superficie);
+  color: var(--texto);
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--primario-suave);
+  border-color: var(--primario);
+}
+
+/* --- Tablas --- */
+.tabla {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.tabla th,
+.tabla td {
+  text-align: left;
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--borde);
+}
+.tabla th {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--texto-suave);
+  background: var(--fondo);
+}
+.tabla tr:last-child td {
+  border-bottom: none;
+}
+.tabla .numero {
+  text-align: right;
+  white-space: nowrap;
+}
+
+/* --- Alertas --- */
+.alerta {
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+.alerta-error {
+  background: var(--peligro-suave);
+  border-color: #f0c4bf;
+  color: var(--peligro);
+}
+.alerta-exito {
+  background: var(--exito-suave);
+  border-color: #b9e2cb;
+  color: var(--exito);
+}
+.alerta-info {
+  background: var(--info-suave);
+  border-color: #c9d8f2;
+  color: var(--primario);
+}
+
+/* --- Barra de acciones y dialogos (los usan los bloques 7.2 y 7.3) --- */
+.barra {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.espacio {
+  flex: 1;
+}
+.fondo-dialogo {
+  position: fixed;
+  inset: 0;
+  background: rgb(0 0 0 / 0.35);
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  z-index: 50;
+}
+.dialogo {
+  width: 100%;
+  max-width: 480px;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--superficie);
+  border-radius: 10px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.dialogo-acciones {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}

@@ -1,0 +1,41 @@
+import { Routes } from '@angular/router';
+import { Layout } from './diseno/layout';
+import { administradorGuard, invitadoGuard, sesionGuard } from './nucleo/guards';
+import { Login } from './paginas/login/login';
+import { Pendiente } from './paginas/pendiente/pendiente';
+
+/**
+ * Rutas. Todo lo que no es el login cuelga del Layout (menu lateral) y pasa
+ * por sesionGuard; lo de /admin ademas por administradorGuard.
+ */
+export const routes: Routes = [
+  { path: 'login', component: Login, canActivate: [invitadoGuard], title: 'Iniciar sesión' },
+  {
+    path: '',
+    component: Layout,
+    canActivate: [sesionGuard],
+    // canActivateChild: el guard se vuelve a evaluar al navegar entre hijos,
+    // asi una sesion que expira mientras se usa la app manda al login.
+    canActivateChild: [sesionGuard],
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'explorador' },
+      { path: 'explorador', component: Pendiente, title: 'Mis documentos' },
+      { path: 'buscar', component: Pendiente, title: 'Buscar' },
+      { path: 'compartidos/conmigo', component: Pendiente, title: 'Compartido conmigo' },
+      { path: 'compartidos/por-mi', component: Pendiente, title: 'Compartido por mí' },
+      { path: 'papelera', component: Pendiente, title: 'Papelera' },
+      { path: 'reportes', component: Pendiente, title: 'Reportes' },
+      { path: 'actividad', component: Pendiente, title: 'Mi actividad' },
+      {
+        path: 'admin',
+        canActivate: [administradorGuard],
+        canActivateChild: [administradorGuard],
+        children: [
+          { path: 'usuarios', component: Pendiente, title: 'Usuarios' },
+          { path: 'actividad', component: Pendiente, title: 'Historial global' },
+        ],
+      },
+    ],
+  },
+  { path: '**', redirectTo: '' },
+];

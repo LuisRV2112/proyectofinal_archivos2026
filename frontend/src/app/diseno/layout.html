@@ -1,0 +1,36 @@
+<div class="contenedor">
+  <aside class="lateral">
+    <div class="marca">Gestión Documental</div>
+
+    <nav>
+      @for (grupo of menu(); track grupo.titulo) {
+        <div class="grupo">{{ grupo.titulo }}</div>
+        @for (opcion of grupo.opciones; track opcion.ruta) {
+          <a [routerLink]="opcion.ruta" routerLinkActive="activo">{{ opcion.texto }}</a>
+        }
+      }
+    </nav>
+
+    @if (autenticacion.sesion(); as sesion) {
+      <div class="usuario">
+        <strong>{{ sesion.nombreCompleto }}</strong>
+        <span class="secundario">{{ sesion.username }} · {{ sesion.rol === 'ADMINISTRADOR' ? 'Administrador' : 'Usuario' }}</span>
+        @if (autenticacion.almacenamientoUsado() !== null) {
+          <span class="secundario">Espacio usado: {{ autenticacion.almacenamientoUsado() | bytes }}</span>
+        }
+        <button class="boton" type="button" (click)="salir()">Cerrar sesión</button>
+      </div>
+    }
+  </aside>
+
+  <main class="contenido">
+    <router-outlet />
+  </main>
+</div>
+
+@if (avisos.actual(); as aviso) {
+  <div class="aviso alerta" [class]="'alerta-' + aviso.tipo" role="status">
+    <span>{{ aviso.texto }}</span>
+    <button class="cerrar" type="button" (click)="avisos.cerrar()" aria-label="Cerrar">×</button>
+  </div>
+}

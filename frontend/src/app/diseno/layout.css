@@ -1,0 +1,99 @@
+.contenedor {
+  display: flex;
+  min-height: 100vh;
+}
+.lateral {
+  width: 230px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--superficie);
+  border-right: 1px solid var(--borde);
+  padding: 16px 12px;
+  position: sticky;
+  top: 0;
+  height: 100vh;
+}
+.marca {
+  font-weight: 700;
+  font-size: 1.05rem;
+  padding: 0 8px 12px;
+}
+nav {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  overflow-y: auto;
+}
+.grupo {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--texto-suave);
+  padding: 14px 8px 4px;
+}
+nav a {
+  padding: 7px 10px;
+  border-radius: 6px;
+  color: var(--texto);
+  text-decoration: none;
+}
+nav a:hover {
+  background: var(--fondo);
+}
+nav a.activo {
+  background: var(--primario-suave);
+  color: var(--primario);
+  font-weight: 600;
+}
+.usuario {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid var(--borde);
+  padding: 12px 8px 0;
+  font-size: 0.9rem;
+}
+.usuario .boton {
+  margin-top: 6px;
+}
+.contenido {
+  flex: 1;
+  min-width: 0;
+  padding: 24px 28px;
+}
+.aviso {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  max-width: 420px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+  z-index: 100;
+}
+.cerrar {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  color: inherit;
+}
+@media (max-width: 760px) {
+  .contenedor {
+    flex-direction: column;
+  }
+  .lateral {
+    width: auto;
+    height: auto;
+    position: static;
+    border-right: none;
+    border-bottom: 1px solid var(--borde);
+  }
+  .contenido {
+    padding: 16px;
+  }
+}
