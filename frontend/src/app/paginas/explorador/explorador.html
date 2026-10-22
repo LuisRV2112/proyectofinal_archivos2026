@@ -1,0 +1,155 @@
+<div class="barra">
+  <div class="migas">
+    @if (esCompartida()) {
+      <a routerLink="/compartidos/conmigo">Compartido conmigo</a>
+    } @else {
+      <a routerLink="/explorador">Mis documentos</a>
+    }
+    @for (miga of contenido()?.migas ?? []; track miga._id; let ultima = $last) {
+      <span class="separador">/</span>
+      @if (ultima) {
+        <strong>{{ miga.nombre }}</strong>
+      } @else {
+        <a [routerLink]="['/explorador', miga._id]">{{ miga.nombre }}</a>
+      }
+    }
+  </div>
+  <span class="espacio"></span>
+  @if (contenido()?.carpeta) {
+    <button class="boton" type="button" (click)="subirNivel()" title="Ir a la carpeta superior">↑ Subir un nivel</button>
+  }
+  @if (esPropio()) {
+    <button class="boton" type="button" (click)="abrirDialogo({ tipo: 'crear' })">+ Nueva carpeta</button>
+    <label class="boton boton-primario">
+      ⇪ Subir archivos
+      <input type="file" accept=".txt,.md" multiple hidden (change)="alElegirArchivos($event)" />
+    </label>
+  }
+</div>
+
+@if (contenido()?.carpeta && !esPropio()) {
+  <div class="alerta alerta-info aviso-acceso">
+    Carpeta compartida contigo con nivel <strong>{{ contenido()?.acceso?.nivel }}</strong>.
+    @if (!puedeEditar()) { Solo puedes ver y descargar su contenido. }
+  </div>
+}
+
+@if (subidas().length) {
+  <div class="subidas">
+    @for (s of subidas(); track s.id) {
+      <div class="subida" [class.subida-error]="s.estado === 'error'">
+        <span class="nombre-subida">{{ s.nombre }}</span>
+        @switch (s.estado) {
+          @case ('subiendo') {
+            <progress max="100" [value]="s.progreso"></progress>
+            <span class="secundario">{{ s.progreso }}%</span>
+          }
+          @case ('listo') {
+            <span class="texto-exito">✓ Subido</span>
+          }
+          @case ('error') {
+            <span class="texto-error">{{ s.mensaje }}</span>
+          }
+        }
+      </div>
+    }
+    <button class="boton boton-chico" type="button" (click)="limpiarSubidas()">Ocultar terminadas</button>
+  </div>
+}
+
+<section
+  class="zona"
+  [class.arrastrando]="arrastrando()"
+  (dragover)="alArrastrar($event)"
+  (dragleave)="arrastrando.set(false)"
+  (drop)="alSoltar($event)"
+>
+  @if (arrastrando()) {
+    <div class="soltar">Suelta los archivos para subirlos aquí</div>
+  }
+
+  @if (error()) {
+    <div class="alerta alerta-error">{{ error() }}</div>
+  } @else if (cargando() && !contenido()) {
+    <p class="secundario">Cargando…</p>
+  } @else {
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>Tipo</th>
+          <th class="numero">Tamaño</th>
+          <th>Modificado</th>
+          <th class="acciones-col">Acciones</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (fila of filas(); track fila.dato._id) {
+          <tr class="fila" (dblclick)="abrir(fila)">
+            <td>
+              <button type="button" class="nombre" (click)="abrir(fila)" [title]="fila.tipo === 'carpeta' ? 'Abrir carpeta' : 'Vista previa'">
+                <span class="icono">{{ fila.tipo === 'carpeta' ? '📁' : '📄' }}</span>
+                {{ fila.dato.nombre }}
+              </button>
+              @if (fila.dato.compartidoCon.length) {
+                <span class="etiqueta" [title]="'Compartido con ' + fila.dato.compartidoCon.length + ' usuario(s)'">
+                  Compartido · {{ fila.dato.compartidoCon.length }}
+                </span>
+              }
+            </td>
+            @if (fila.tipo === 'archivo') {
+              <td>{{ fila.dato.extension.toUpperCase() }}</td>
+              <td class="numero">{{ fila.dato.tamano | bytes }}</td>
+            } @else {
+              <td>Carpeta</td>
+              <td class="numero secundario">—</td>
+            }
+            <td>{{ fila.dato.actualizadoEn | date: 'dd/MM/yyyy HH:mm' }}</td>
+            <td>
+              <div class="acciones">
+              @if (fila.tipo === 'archivo') {
+                <button class="boton boton-chico" type="button" (click)="descargar(fila.dato)">Descargar</button>
+              }
+              @if (puedeEditar()) {
+                <button class="boton boton-chico" type="button" (click)="abrirDialogo({ tipo: 'renombrar', elemento: fila })">Renombrar</button>
+              }
+              @if (esPropio()) {
+                <button class="boton boton-chico" type="button" (click)="abrirDialogo({ tipo: 'mover', elemento: fila })">Mover</button>
+                <button class="boton boton-chico texto-error" type="button" (click)="abrirDialogo({ tipo: 'eliminar', elemento: fila })">Eliminar</button>
+              }
+              </div>
+            </td>
+          </tr>
+        } @empty {
+          <tr>
+            <td colspan="5" class="vacio secundario">
+              Esta carpeta está vacía.
+              @if (esPropio()) { Arrastra archivos .txt o .md aquí, o usa «Subir archivos». }
+            </td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  }
+</section>
+
+@if (dialogo(); as d) {
+  @if (d.tipo === 'crear') {
+    <app-dialogo-nombre titulo="Nueva carpeta" textoBoton="Crear" [ocupado]="ocupado()" [error]="errorDialogo()"
+      (guardar)="crearCarpeta($event)" (cancelar)="cerrarDialogo()" />
+  } @else if (d.tipo === 'renombrar') {
+    <app-dialogo-nombre [titulo]="'Renombrar ' + (d.elemento.tipo === 'carpeta' ? 'carpeta' : 'archivo')"
+      [valorInicial]="d.elemento.dato.nombre" [ocupado]="ocupado()" [error]="errorDialogo()"
+      (guardar)="renombrar(d.elemento, $event)" (cancelar)="cerrarDialogo()" />
+  } @else if (d.tipo === 'mover') {
+    <app-selector-carpeta [titulo]="'Mover «' + d.elemento.dato.nombre + '»'" textoBoton="Mover aquí"
+      [excluirId]="d.elemento.tipo === 'carpeta' ? d.elemento.dato._id : null"
+      [ocupado]="ocupado()" [error]="errorDialogo()"
+      (elegir)="mover(d.elemento, $event)" (cancelar)="cerrarDialogo()" />
+  } @else if (d.tipo === 'eliminar') {
+    <app-confirmacion titulo="¿Enviar a la papelera?" [mensaje]="mensajeEliminar(d.elemento)" textoBoton="Enviar a la papelera"
+      [ocupado]="ocupado()" [error]="errorDialogo()" (aceptar)="eliminar(d.elemento)" (cancelar)="cerrarDialogo()" />
+  } @else if (d.tipo === 'previa') {
+    <app-vista-previa [archivo]="d.archivo" (cerrar)="cerrarDialogo()" />
+  }
+}

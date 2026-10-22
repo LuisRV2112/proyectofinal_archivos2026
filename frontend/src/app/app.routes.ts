@@ -1,6 +1,8 @@
 import { Routes } from '@angular/router';
 import { Layout } from './diseno/layout';
 import { administradorGuard, invitadoGuard, sesionGuard } from './nucleo/guards';
+import { Buscar } from './paginas/buscar/buscar';
+import { Explorador } from './paginas/explorador/explorador';
 import { Login } from './paginas/login/login';
 import { Pendiente } from './paginas/pendiente/pendiente';
 
@@ -19,8 +21,10 @@ export const routes: Routes = [
     canActivateChild: [sesionGuard],
     children: [
       { path: '', pathMatch: 'full', redirectTo: 'explorador' },
-      { path: 'explorador', component: Pendiente, title: 'Mis documentos' },
-      { path: 'buscar', component: Pendiente, title: 'Buscar' },
+      { path: 'explorador', component: Explorador, title: 'Mis documentos' },
+      // :id llega al componente como input() (withComponentInputBinding).
+      { path: 'explorador/:id', component: Explorador, title: 'Mis documentos' },
+      { path: 'buscar', component: Buscar, title: 'Buscar' },
       { path: 'compartidos/conmigo', component: Pendiente, title: 'Compartido conmigo' },
       { path: 'compartidos/por-mi', component: Pendiente, title: 'Compartido por mí' },
       { path: 'papelera', component: Pendiente, title: 'Papelera' },

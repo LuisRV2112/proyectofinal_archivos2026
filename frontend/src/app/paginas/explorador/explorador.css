@@ -1,0 +1,98 @@
+.migas {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 1.05rem;
+}
+.separador {
+  color: var(--texto-suave);
+}
+.aviso-acceso {
+  margin-bottom: 14px;
+}
+.subidas {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+  margin-bottom: 14px;
+  padding: 10px 14px;
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+}
+.subida {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.9rem;
+}
+.nombre-subida {
+  min-width: 200px;
+  font-weight: 600;
+}
+.texto-exito {
+  color: var(--exito);
+}
+.zona {
+  position: relative;
+  border-radius: 8px;
+}
+.zona.arrastrando {
+  outline: 2px dashed var(--primario);
+  outline-offset: 4px;
+}
+.soltar {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: rgb(230 237 251 / 0.85);
+  color: var(--primario);
+  font-weight: 600;
+  border-radius: 8px;
+  z-index: 2;
+  pointer-events: none;
+}
+.fila:hover {
+  background: var(--fondo);
+}
+.nombre {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.nombre:hover {
+  color: var(--primario);
+  text-decoration: underline;
+}
+.icono {
+  margin-right: 6px;
+}
+.etiqueta {
+  margin-left: 8px;
+  font-size: 0.72rem;
+  padding: 1px 7px;
+  border-radius: 10px;
+  background: var(--primario-suave);
+  color: var(--primario);
+  white-space: nowrap;
+}
+.acciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  justify-content: flex-end;
+}
+.acciones-col {
+  text-align: right;
+}
+.vacio {
+  text-align: center;
+  padding: 28px;
+}

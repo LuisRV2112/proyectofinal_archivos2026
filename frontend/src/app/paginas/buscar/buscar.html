@@ -1,0 +1,104 @@
+<h1>Buscar archivos</h1>
+
+<form class="filtros" (ngSubmit)="buscar()">
+  <label class="campo texto">
+    <span>Texto (nombre o etiquetas)</span>
+    <input name="texto" [ngModel]="texto()" (ngModelChange)="texto.set($event)" placeholder="p. ej. contrato, acta, informe" />
+  </label>
+  <label class="campo">
+    <span>Tipo</span>
+    <select name="extension" [ngModel]="extension()" (ngModelChange)="extension.set($event)">
+      <option value="">Todos</option>
+      <option value="txt">.txt</option>
+      <option value="md">.md</option>
+    </select>
+  </label>
+  <label class="campo">
+    <span>Subido desde</span>
+    <input type="date" name="desde" [ngModel]="desde()" (ngModelChange)="desde.set($event)" />
+  </label>
+  <label class="campo">
+    <span>Subido hasta</span>
+    <input type="date" name="hasta" [ngModel]="hasta()" (ngModelChange)="hasta.set($event)" />
+  </label>
+  <div class="campo">
+    <span>Carpeta</span>
+    <div class="carpeta">
+      <button class="boton" type="button" (click)="eligiendoCarpeta.set(true)">{{ carpeta()?.ruta ?? 'Cualquiera' }}</button>
+      @if (carpeta()) {
+        <button class="boton boton-chico" type="button" (click)="carpeta.set(null)" title="Quitar">×</button>
+      }
+    </div>
+  </div>
+  @if (carpeta()) {
+    <label class="campo casilla">
+      <input type="checkbox" name="enSubarbol" [ngModel]="enSubarbol()" (ngModelChange)="enSubarbol.set($event)" />
+      <span>Incluir subcarpetas</span>
+    </label>
+  }
+  <div class="barra" style="margin: 0">
+    <button class="boton boton-primario" type="submit" [disabled]="cargando()">Buscar</button>
+    <button class="boton" type="button" (click)="limpiar()">Limpiar</button>
+  </div>
+</form>
+
+@if (error()) {
+  <div class="alerta alerta-error">{{ error() }}</div>
+} @else if (resultado(); as r) {
+  <p class="secundario">{{ r.total }} archivo(s) encontrado(s)</p>
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Ubicación</th>
+        <th>Tipo</th>
+        <th class="numero">Tamaño</th>
+        <th>Subido</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (archivo of r.resultados; track archivo._id) {
+        <tr>
+          <td>
+            <button type="button" class="nombre" (click)="previa.set(archivo)" title="Vista previa">📄 {{ archivo.nombre }}</button>
+            @if (!esPropio(archivo)) {
+              <span class="secundario"> · de otro usuario</span>
+            }
+          </td>
+          <td>
+            @if (archivo.carpetaId) {
+              <a [routerLink]="['/explorador', archivo.carpetaId]">{{ archivo.ubicacion }}</a>
+            } @else if (esPropio(archivo)) {
+              <a routerLink="/explorador">/</a>
+            } @else {
+              /
+            }
+          </td>
+          <td>{{ archivo.extension.toUpperCase() }}</td>
+          <td class="numero">{{ archivo.tamano | bytes }}</td>
+          <td>{{ archivo.creadoEn | date: 'dd/MM/yyyy' }}</td>
+          <td><button class="boton boton-chico" type="button" (click)="descargar(archivo)">Descargar</button></td>
+        </tr>
+      } @empty {
+        <tr><td colspan="6" class="secundario">Ningún archivo coincide con los filtros.</td></tr>
+      }
+    </tbody>
+  </table>
+
+  @if (totalPaginas() > 1) {
+    <div class="paginacion">
+      <button class="boton boton-chico" type="button" [disabled]="pagina() <= 1 || cargando()" (click)="buscar(pagina() - 1)">‹ Anterior</button>
+      <span>Página {{ pagina() }} de {{ totalPaginas() }}</span>
+      <button class="boton boton-chico" type="button" [disabled]="pagina() >= totalPaginas() || cargando()" (click)="buscar(pagina() + 1)">Siguiente ›</button>
+    </div>
+  }
+}
+
+@if (eligiendoCarpeta()) {
+  <app-selector-carpeta titulo="Buscar dentro de…" textoBoton="Elegir esta carpeta"
+    (elegir)="elegirCarpeta($event)" (cancelar)="eligiendoCarpeta.set(false)" />
+}
+@if (previa(); as archivo) {
+  <app-vista-previa [archivo]="archivo" (cerrar)="previa.set(null)" />
+}
