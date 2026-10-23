@@ -46,8 +46,18 @@ export class Autenticacion {
 
   /** GET /api/auth/yo: datos actuales del usuario, incluido su almacenamiento. */
   refrescarPerfil() {
-    this.http.get<{ almacenamientoUsado: number }>(`${URL_API}/auth/yo`).subscribe({
-      next: (perfil) => this.almacenamientoUsado.set(perfil.almacenamientoUsado),
+    type Perfil = Pick<Sesion, 'nombreCompleto' | 'email'> & { almacenamientoUsado: number };
+    this.http.get<Perfil>(`${URL_API}/auth/yo`).subscribe({
+      next: (perfil) => {
+        this.almacenamientoUsado.set(perfil.almacenamientoUsado);
+        // Nombre y correo pueden haber cambiado (el admin se edito a si mismo).
+        const sesion = this.sesion();
+        if (sesion && (sesion.nombreCompleto !== perfil.nombreCompleto || sesion.email !== perfil.email)) {
+          const actualizada = { ...sesion, nombreCompleto: perfil.nombreCompleto, email: perfil.email };
+          localStorage.setItem(CLAVE_SESION, JSON.stringify(actualizada));
+          this.sesion.set(actualizada);
+        }
+      },
       error: () => {}, // Dato accesorio; un 401 ya lo maneja el interceptor.
     });
   }

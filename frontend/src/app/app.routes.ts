@@ -10,7 +10,7 @@ import { Login } from './paginas/login/login';
 import { PapeleraPagina } from './paginas/papelera/papelera';
 import { ReportesIndice } from './paginas/reportes/indice';
 import { ReportePagina } from './paginas/reportes/reporte';
-import { Pendiente } from './paginas/pendiente/pendiente';
+import { UsuariosPagina } from './paginas/usuarios/usuarios';
 
 /**
  * Rutas. Todo lo que no es el login cuelga del Layout (menu lateral) y pasa
@@ -44,7 +44,7 @@ export const routes: Routes = [
         canActivate: [administradorGuard],
         canActivateChild: [administradorGuard],
         children: [
-          { path: 'usuarios', component: Pendiente, title: 'Usuarios' },
+          { path: 'usuarios', component: UsuariosPagina, title: 'Usuarios' },
           // data.global llega al componente como input (withComponentInputBinding).
           { path: 'actividad', component: ActividadPagina, data: { global: true }, title: 'Historial global' },
         ],

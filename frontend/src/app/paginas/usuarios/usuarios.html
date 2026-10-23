@@ -1,0 +1,94 @@
+<h1>Usuarios</h1>
+
+<div class="barra">
+  <label class="campo">
+    <span>Rol</span>
+    <select [ngModel]="rol()" (ngModelChange)="rol.set($event); cargar()">
+      <option value="">Todos</option>
+      <option value="ADMINISTRADOR">Administrador</option>
+      <option value="USUARIO">Usuario</option>
+    </select>
+  </label>
+  <label class="campo">
+    <span>Estado</span>
+    <select [ngModel]="activo()" (ngModelChange)="activo.set($event); cargar()">
+      <option value="">Todos</option>
+      <option value="true">Activos</option>
+      <option value="false">Desactivados</option>
+    </select>
+  </label>
+  <span class="espacio"></span>
+  <button class="boton boton-primario" type="button" (click)="abrir('nuevo')">+ Nuevo usuario</button>
+</div>
+
+@if (error()) {
+  <div class="alerta alerta-error">{{ error() }}</div>
+} @else if (cargando() && !usuarios().length) {
+  <p class="secundario">Cargando…</p>
+} @else {
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th>Usuario</th>
+        <th>Correo</th>
+        <th>Rol</th>
+        <th>Estado</th>
+        <th class="numero">Almacenamiento</th>
+        <th>Creado</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (u of usuarios(); track u._id) {
+        <tr [class.desactivado]="!u.activo">
+          <td>
+            {{ u.nombreCompleto }}
+            <div class="secundario">{{ u.username }}{{ u._id === idPropio() ? ' (tú)' : '' }}</div>
+          </td>
+          <td>{{ u.email }}</td>
+          <td>{{ u.rol === 'ADMINISTRADOR' ? 'Administrador' : 'Usuario' }}</td>
+          <td>
+            <span class="estado" [class.activo]="u.activo" [class.inactivo]="!u.activo">{{ u.activo ? 'Activo' : 'Desactivado' }}</span>
+          </td>
+          <td class="numero">{{ u.almacenamientoUsado | bytes }}</td>
+          <td>{{ u.creadoEn | date: 'dd/MM/yyyy' }}</td>
+          <td>
+            <div class="acciones">
+              <button class="boton boton-chico" type="button" (click)="abrir(u)">Editar</button>
+              @if (u._id !== idPropio()) {
+                <button class="boton boton-chico" [class.boton-peligro]="u.activo" type="button" [disabled]="ocupado()" (click)="cambiarEstado(u)">
+                  {{ u.activo ? 'Desactivar' : 'Activar' }}
+                </button>
+              }
+            </div>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="7" class="secundario">Ningún usuario con esos filtros.</td></tr>
+      }
+    </tbody>
+  </table>
+}
+
+@if (editando(); as e) {
+  <app-dialogo-usuario
+    [usuario]="e === 'nuevo' ? null : e"
+    [idPropio]="idPropio()"
+    [ocupado]="ocupado()"
+    [error]="errorDialogo()"
+    (crear)="crear($event)"
+    (guardar)="e !== 'nuevo' && guardar(e, $event)"
+    (cancelar)="editando.set(null)"
+  />
+}
+@if (aDesactivar(); as u) {
+  <app-confirmacion
+    titulo="Desactivar cuenta"
+    [mensaje]="mensajeDesactivar(u)"
+    textoBoton="Desactivar"
+    [ocupado]="ocupado()"
+    [error]="errorDialogo()"
+    (aceptar)="aplicarEstado(u, false)"
+    (cancelar)="aDesactivar.set(null)"
+  />
+}
