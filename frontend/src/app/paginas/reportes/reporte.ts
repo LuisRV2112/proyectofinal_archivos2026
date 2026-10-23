@@ -8,6 +8,7 @@ import { mensajeDeError } from '../../nucleo/errores';
 import { AccionPipe } from '../../nucleo/formato';
 import { ACCIONES, Usuario } from '../../nucleo/modelos';
 import { Reportes } from '../../servicios/reportes';
+import { UsuariosApi } from '../../servicios/usuarios';
 import { DefinicionReporte, Filtro, REPORTES } from './catalogo';
 
 const LIMITE_PAGINA = 20;
@@ -39,6 +40,7 @@ function fechaLocal(fecha: Date): string {
 })
 export class ReportePagina {
   private readonly reportes = inject(Reportes);
+  private readonly usuariosApi = inject(UsuariosApi);
   readonly esAdministrador = inject(Autenticacion).esAdministrador;
 
   /** :clave de la ruta (withComponentInputBinding). */
@@ -127,7 +129,7 @@ export class ReportePagina {
   }
 
   private cargarUsuarios() {
-    this.reportes.usuarios().subscribe({ next: (u) => this.usuarios.set(u) });
+    this.usuariosApi.listar().subscribe({ next: (u) => this.usuarios.set(u) });
   }
 
   /** Solo los filtros que el reporte declara; los vacios no se envian. */

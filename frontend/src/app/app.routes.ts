@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 import { Layout } from './diseno/layout';
 import { administradorGuard, invitadoGuard, sesionGuard } from './nucleo/guards';
+import { ActividadPagina } from './paginas/actividad/actividad';
 import { Buscar } from './paginas/buscar/buscar';
 import { CompartidoConmigoPagina } from './paginas/compartidos/conmigo';
 import { CompartidoPorMiPagina } from './paginas/compartidos/por-mi';
@@ -37,14 +38,15 @@ export const routes: Routes = [
       // :clave elige el reporte del catalogo; los de administrador los
       // bloquea la vista (y la API con 403), porque comparten la ruta.
       { path: 'reportes/:clave', component: ReportePagina, title: 'Reporte' },
-      { path: 'actividad', component: Pendiente, title: 'Mi actividad' },
+      { path: 'actividad', component: ActividadPagina, title: 'Mi actividad' },
       {
         path: 'admin',
         canActivate: [administradorGuard],
         canActivateChild: [administradorGuard],
         children: [
           { path: 'usuarios', component: Pendiente, title: 'Usuarios' },
-          { path: 'actividad', component: Pendiente, title: 'Historial global' },
+          // data.global llega al componente como input (withComponentInputBinding).
+          { path: 'actividad', component: ActividadPagina, data: { global: true }, title: 'Historial global' },
         ],
       },
     ],

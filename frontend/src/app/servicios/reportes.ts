@@ -2,7 +2,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import { URL_API } from '../nucleo/configuracion';
-import { Accion, EntradaActividad, Paginado, RecursoTipo, Usuario, UsuarioResumen } from '../nucleo/modelos';
+import { Accion, EntradaActividad, Paginado, RecursoTipo, UsuarioResumen } from '../nucleo/modelos';
 
 /**
  * Reportes (GET /api/reportes/...). Todos los calcula MongoDB con un
@@ -19,11 +19,6 @@ export class Reportes {
       if (valor != null && valor !== '') params = params.set(clave, String(valor));
     }
     return this.http.get<T>(`${URL_API}/reportes/${ruta}`, { params });
-  }
-
-  /** Lista de usuarios para el filtro "usuario" (solo administrador). */
-  usuarios(): Observable<Usuario[]> {
-    return this.http.get<Usuario[]>(`${URL_API}/usuarios`);
   }
 }
 

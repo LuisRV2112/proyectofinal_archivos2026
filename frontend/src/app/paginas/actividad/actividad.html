@@ -1,0 +1,103 @@
+@if (global()) {
+  <h1>Historial global</h1>
+  <p class="secundario descripcion">Todas las operaciones registradas en el sistema, de todos los usuarios.</p>
+} @else {
+  <h1>Mi actividad</h1>
+  <p class="secundario descripcion">Las operaciones que has realizado, de la más reciente a la más antigua.</p>
+}
+
+<form class="filtros" (ngSubmit)="buscar()">
+  @if (global()) {
+    <label class="campo">
+      <span>Usuario</span>
+      <select name="usuarioId" [ngModel]="usuarioId()" (ngModelChange)="usuarioId.set($event)">
+        <option value="">Todos</option>
+        @for (u of usuarios(); track u._id) {
+          <option [value]="u._id">{{ u.username }} — {{ u.nombreCompleto }}</option>
+        }
+      </select>
+    </label>
+  }
+  <label class="campo">
+    <span>Acción</span>
+    <select name="accion" [ngModel]="accion()" (ngModelChange)="accion.set($event)">
+      <option value="">Todas</option>
+      @for (a of acciones; track a) {
+        <option [value]="a">{{ a | accion }}</option>
+      }
+    </select>
+  </label>
+  <label class="campo">
+    <span>Tipo de recurso</span>
+    <select name="recursoTipo" [ngModel]="recursoTipo()" (ngModelChange)="recursoTipo.set($event)">
+      <option value="">Todos</option>
+      <option value="ARCHIVO">Archivo</option>
+      <option value="CARPETA">Carpeta</option>
+      <option value="USUARIO">Usuario</option>
+    </select>
+  </label>
+  <label class="campo">
+    <span>Desde</span>
+    <input type="date" name="desde" [ngModel]="desde()" (ngModelChange)="desde.set($event)" />
+  </label>
+  <label class="campo">
+    <span>Hasta</span>
+    <input type="date" name="hasta" [ngModel]="hasta()" (ngModelChange)="hasta.set($event)" />
+  </label>
+  <div class="barra" style="margin: 0">
+    <button class="boton boton-primario" type="submit" [disabled]="cargando()">Filtrar</button>
+    <button class="boton" type="button" (click)="limpiar()">Limpiar</button>
+  </div>
+</form>
+
+@if (error()) {
+  <div class="alerta alerta-error">{{ error() }}</div>
+} @else if (resultado(); as r) {
+  <p class="secundario">{{ r.total }} operación(es)</p>
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        @if (global()) {
+          <th>Usuario</th>
+        }
+        <th>Acción</th>
+        <th>Recurso</th>
+        <th>Detalle</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (e of r.resultados; track e._id) {
+        <tr>
+          <td>{{ e.fecha | date: 'dd/MM/yyyy HH:mm' }}</td>
+          @if (global()) {
+            <td>
+              @if (e.usuario; as u) {
+                <button type="button" class="enlace" [title]="'Ver solo a ' + u.nombreCompleto" (click)="filtrarPorUsuario(u._id)">
+                  {{ u.username }}
+                </button>
+              } @else {
+                <span class="secundario" title="El username intentado no existe">—</span>
+              }
+            </td>
+          }
+          <td [class.fallido]="e.accion === 'LOGIN_FALLIDO'">{{ e.accion | accion }}</td>
+          <td>{{ e.recursoNombre }} <span class="secundario">({{ e.recursoTipo.toLowerCase() }})</span></td>
+          <td class="secundario">{{ e.detalle }}</td>
+        </tr>
+      } @empty {
+        <tr><td [attr.colspan]="global() ? 5 : 4" class="secundario">No hay actividad con esos filtros.</td></tr>
+      }
+    </tbody>
+  </table>
+
+  @if (totalPaginas() > 1) {
+    <div class="paginacion">
+      <button class="boton boton-chico" type="button" [disabled]="pagina() <= 1 || cargando()" (click)="buscar(pagina() - 1)">‹ Anterior</button>
+      <span>Página {{ pagina() }} de {{ totalPaginas() }}</span>
+      <button class="boton boton-chico" type="button" [disabled]="pagina() >= totalPaginas() || cargando()" (click)="buscar(pagina() + 1)">Siguiente ›</button>
+    </div>
+  }
+} @else if (cargando()) {
+  <p class="secundario">Cargando…</p>
+}
