@@ -2,6 +2,8 @@ import { Routes } from '@angular/router';
 import { Layout } from './diseno/layout';
 import { administradorGuard, invitadoGuard, sesionGuard } from './nucleo/guards';
 import { Buscar } from './paginas/buscar/buscar';
+import { CompartidoConmigoPagina } from './paginas/compartidos/conmigo';
+import { CompartidoPorMiPagina } from './paginas/compartidos/por-mi';
 import { Explorador } from './paginas/explorador/explorador';
 import { Login } from './paginas/login/login';
 import { Pendiente } from './paginas/pendiente/pendiente';
@@ -25,8 +27,8 @@ export const routes: Routes = [
       // :id llega al componente como input() (withComponentInputBinding).
       { path: 'explorador/:id', component: Explorador, title: 'Mis documentos' },
       { path: 'buscar', component: Buscar, title: 'Buscar' },
-      { path: 'compartidos/conmigo', component: Pendiente, title: 'Compartido conmigo' },
-      { path: 'compartidos/por-mi', component: Pendiente, title: 'Compartido por mí' },
+      { path: 'compartidos/conmigo', component: CompartidoConmigoPagina, title: 'Compartido conmigo' },
+      { path: 'compartidos/por-mi', component: CompartidoPorMiPagina, title: 'Compartido por mí' },
       { path: 'papelera', component: Pendiente, title: 'Papelera' },
       { path: 'reportes', component: Pendiente, title: 'Reportes' },
       { path: 'actividad', component: Pendiente, title: 'Mi actividad' },

@@ -4,6 +4,7 @@ import { DatePipe } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { Observable } from 'rxjs';
 import { Confirmacion } from '../../componentes/confirmacion';
+import { DialogoCompartir } from '../../componentes/dialogo-compartir';
 import { DialogoNombre } from '../../componentes/dialogo-nombre';
 import { SelectorCarpeta } from '../../componentes/selector-carpeta';
 import { VistaPrevia } from '../../componentes/vista-previa';
@@ -23,6 +24,7 @@ type Dialogo =
   | { tipo: 'renombrar'; elemento: Elemento }
   | { tipo: 'mover'; elemento: Elemento }
   | { tipo: 'eliminar'; elemento: Elemento }
+  | { tipo: 'compartir'; elemento: Elemento }
   | { tipo: 'previa'; archivo: Archivo };
 
 interface Subida {
@@ -40,7 +42,7 @@ const TAMANO_MAXIMO = 5 * 1024 * 1024;
 
 @Component({
   selector: 'app-explorador',
-  imports: [RouterLink, DatePipe, BytesPipe, Confirmacion, DialogoNombre, SelectorCarpeta, VistaPrevia],
+  imports: [RouterLink, DatePipe, BytesPipe, Confirmacion, DialogoCompartir, DialogoNombre, SelectorCarpeta, VistaPrevia],
   templateUrl: './explorador.html',
   styleUrl: './explorador.css',
 })

@@ -114,6 +114,7 @@
                 <button class="boton boton-chico" type="button" (click)="abrirDialogo({ tipo: 'renombrar', elemento: fila })">Renombrar</button>
               }
               @if (esPropio()) {
+                <button class="boton boton-chico" type="button" (click)="abrirDialogo({ tipo: 'compartir', elemento: fila })">Compartir</button>
                 <button class="boton boton-chico" type="button" (click)="abrirDialogo({ tipo: 'mover', elemento: fila })">Mover</button>
                 <button class="boton boton-chico texto-error" type="button" (click)="abrirDialogo({ tipo: 'eliminar', elemento: fila })">Eliminar</button>
               }
@@ -149,6 +150,10 @@
   } @else if (d.tipo === 'eliminar') {
     <app-confirmacion titulo="¿Enviar a la papelera?" [mensaje]="mensajeEliminar(d.elemento)" textoBoton="Enviar a la papelera"
       [ocupado]="ocupado()" [error]="errorDialogo()" (aceptar)="eliminar(d.elemento)" (cancelar)="cerrarDialogo()" />
+  } @else if (d.tipo === 'compartir') {
+    <!-- Al cerrar se recarga: el contador "Compartido · N" sale del array embebido. -->
+    <app-dialogo-compartir [recurso]="{ tipo: d.elemento.tipo, _id: d.elemento.dato._id, nombre: d.elemento.dato.nombre }"
+      (cerrar)="cerrarDialogo(); cargar()" />
   } @else if (d.tipo === 'previa') {
     <app-vista-previa [archivo]="d.archivo" (cerrar)="cerrarDialogo()" />
   }

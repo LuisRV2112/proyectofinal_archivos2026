@@ -84,3 +84,37 @@ export interface Paginado<T> {
   limite: number;
   resultados: T[];
 }
+
+/** Datos publicos de un usuario (lo que la API expone al compartir). */
+export interface UsuarioResumen {
+  _id: string;
+  username: string;
+  nombreCompleto: string;
+}
+
+/** Recurso sobre el que se gestionan permisos; la API usa "carpetas" | "archivos". */
+export interface RecursoCompartible {
+  tipo: 'carpeta' | 'archivo';
+  _id: string;
+  nombre: string;
+}
+
+/** GET /api/recursos/:tipo/:id/compartir (usuarioId y otorgadoPor poblados). */
+export interface PermisoDetallado {
+  usuarioId: UsuarioResumen;
+  nivel: Nivel;
+  otorgadoPor: UsuarioResumen;
+  otorgadoEn: string;
+}
+
+/** GET /api/compartidos/conmigo: el recurso con SU nivel (no con quien mas esta compartido). */
+export type CompartidoConmigo = (
+  | ({ tipo: 'CARPETA' } & Omit<Carpeta, 'compartidoCon' | 'propietarioId'>)
+  | ({ tipo: 'ARCHIVO' } & Omit<Archivo, 'compartidoCon' | 'propietarioId'>)
+) & { propietario: UsuarioResumen; nivel: Nivel; otorgadoEn: string };
+
+/** GET /api/compartidos/por-mi: recursos propios con sus permisos (usuarios poblados). */
+export type CompartidoPorMi = (
+  | ({ tipo: 'CARPETA' } & Omit<Carpeta, 'compartidoCon'>)
+  | ({ tipo: 'ARCHIVO' } & Omit<Archivo, 'compartidoCon'>)
+) & { compartidoCon: (Omit<Permiso, 'usuarioId'> & { usuarioId: UsuarioResumen })[] };
