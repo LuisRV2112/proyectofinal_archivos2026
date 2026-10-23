@@ -1,0 +1,60 @@
+<h1>Papelera</h1>
+
+@if (error()) {
+  <div class="alerta alerta-error">{{ error() }}</div>
+} @else if (cargando()) {
+  <p class="secundario">Cargando…</p>
+} @else if (papelera(); as p) {
+  <p class="secundario resumen">
+    Los elementos de la papelera siguen ocupando espacio
+    @if (p.bytesOcupados) { ({{ p.bytesOcupados | bytes }}) } hasta que los elimines definitivamente.
+  </p>
+
+  <table class="tabla">
+    <thead>
+      <tr>
+        <th>Nombre</th>
+        <th>Ubicación original</th>
+        <th class="numero">Tamaño</th>
+        <th>Eliminado</th>
+        <th class="numero">Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (e of p.elementos; track e._id) {
+        <tr>
+          <td>
+            {{ e.tipo === 'CARPETA' ? '📁' : '📄' }} {{ e.nombre }}
+            @if (e.tipo === 'CARPETA') {
+              <div class="secundario contiene">Contiene {{ e.contiene.carpetas }} subcarpeta(s) y {{ e.contiene.archivos }} archivo(s)</div>
+            }
+          </td>
+          <td>
+            @if (e.ubicacionOriginal) {
+              {{ e.ubicacionOriginal }}
+            } @else {
+              <span class="secundario" title="Se restaurará en la raíz">(su carpeta ya no existe)</span>
+            }
+          </td>
+          <td class="numero">{{ (e.tipo === 'CARPETA' ? e.contiene.bytes : e.tamano) | bytes }}</td>
+          <td>{{ e.eliminadoEn | date: 'dd/MM/yyyy HH:mm' }}</td>
+          <td>
+            <div class="acciones">
+              <button class="boton boton-chico" type="button" (click)="restaurar(e)" [disabled]="restaurando() === e._id">
+                {{ restaurando() === e._id ? 'Restaurando…' : 'Restaurar' }}
+              </button>
+              <button class="boton boton-chico texto-error" type="button" (click)="pedirEliminar(e)">Eliminar definitivamente</button>
+            </div>
+          </td>
+        </tr>
+      } @empty {
+        <tr><td colspan="5" class="secundario">La papelera está vacía.</td></tr>
+      }
+    </tbody>
+  </table>
+}
+
+@if (aEliminar(); as e) {
+  <app-confirmacion titulo="¿Eliminar definitivamente?" [mensaje]="mensajeEliminar(e)" textoBoton="Eliminar para siempre"
+    [ocupado]="eliminando()" [error]="errorEliminar()" (aceptar)="eliminar()" (cancelar)="aEliminar.set(null)" />
+}

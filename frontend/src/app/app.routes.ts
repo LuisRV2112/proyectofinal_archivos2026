@@ -6,6 +6,7 @@ import { CompartidoConmigoPagina } from './paginas/compartidos/conmigo';
 import { CompartidoPorMiPagina } from './paginas/compartidos/por-mi';
 import { Explorador } from './paginas/explorador/explorador';
 import { Login } from './paginas/login/login';
+import { PapeleraPagina } from './paginas/papelera/papelera';
 import { Pendiente } from './paginas/pendiente/pendiente';
 
 /**
@@ -29,7 +30,7 @@ export const routes: Routes = [
       { path: 'buscar', component: Buscar, title: 'Buscar' },
       { path: 'compartidos/conmigo', component: CompartidoConmigoPagina, title: 'Compartido conmigo' },
       { path: 'compartidos/por-mi', component: CompartidoPorMiPagina, title: 'Compartido por mí' },
-      { path: 'papelera', component: Pendiente, title: 'Papelera' },
+      { path: 'papelera', component: PapeleraPagina, title: 'Papelera' },
       { path: 'reportes', component: Pendiente, title: 'Reportes' },
       { path: 'actividad', component: Pendiente, title: 'Mi actividad' },
       {

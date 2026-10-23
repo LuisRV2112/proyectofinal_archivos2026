@@ -118,3 +118,33 @@ export type CompartidoPorMi = (
   | ({ tipo: 'CARPETA' } & Omit<Carpeta, 'compartidoCon'>)
   | ({ tipo: 'ARCHIVO' } & Omit<Archivo, 'compartidoCon'>)
 ) & { compartidoCon: (Omit<Permiso, 'usuarioId'> & { usuarioId: UsuarioResumen })[] };
+
+/** GET /api/papelera: solo las raices de cada eliminacion. */
+export type ElementoPapelera = {
+  _id: string;
+  nombre: string;
+  eliminadoEn: string;
+  /** null si la carpeta de origen ya no existe. */
+  ubicacionOriginal: string | null;
+} & (
+  | { tipo: 'CARPETA'; contiene: { carpetas: number; archivos: number; bytes: number } }
+  | { tipo: 'ARCHIVO'; extension: 'txt' | 'md'; tamano: number }
+);
+
+export interface Papelera {
+  elementos: ElementoPapelera[];
+  bytesOcupados: number;
+}
+
+export interface ResultadoRestaurar {
+  nombre: string;
+  ubicacion: string;
+  restaurados: number;
+  avisos: string[];
+}
+
+export interface ResultadoEliminacionDefinitiva {
+  archivos: number;
+  carpetas: number;
+  bytesLiberados: number;
+}
