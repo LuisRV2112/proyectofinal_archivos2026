@@ -230,6 +230,8 @@ export async function principalesAcciones(consulta) {
     },
     // 3. Segundo agrupamiento: por accion. Cada grupo del paso 2 es un
     //    usuario distinto; $topN se queda con los 3 que mas la realizan.
+    //    El desempate por _id hace estable el orden entre consultas: sin el,
+    //    dos usuarios con la misma cantidad podian salir en cualquier orden.
     {
       $group: {
         _id: '$_id.accion',
@@ -237,7 +239,7 @@ export async function principalesAcciones(consulta) {
         usuariosDistintos: { $sum: 1 },
         ultima: { $max: '$ultima' },
         quienesMas: {
-          $topN: { n: 3, sortBy: { cantidad: -1 }, output: { usuarioId: '$_id.usuarioId', cantidad: '$cantidad' } },
+          $topN: { n: 3, sortBy: { cantidad: -1, _id: 1 }, output: { usuarioId: '$_id.usuarioId', cantidad: '$cantidad' } },
         },
       },
     },

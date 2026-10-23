@@ -148,3 +148,48 @@ export interface ResultadoEliminacionDefinitiva {
   carpetas: number;
   bytesLiberados: number;
 }
+
+/** Acciones del historial (enum ACCIONES del modelo Actividad del backend). */
+export const ACCIONES = [
+  'LOGIN',
+  'LOGIN_FALLIDO',
+  'CREAR_USUARIO',
+  'MODIFICAR_USUARIO',
+  'ACTIVAR_USUARIO',
+  'DESACTIVAR_USUARIO',
+  'CREAR_CARPETA',
+  'ELIMINAR_CARPETA',
+  'SUBIR',
+  'DESCARGAR',
+  'RENOMBRAR',
+  'MOVER',
+  'ELIMINAR',
+  'RESTAURAR',
+  'ELIMINAR_DEFINITIVO',
+  'COMPARTIR',
+  'MODIFICAR_PERMISO',
+  'REVOCAR',
+] as const;
+export type Accion = (typeof ACCIONES)[number];
+export type RecursoTipo = 'ARCHIVO' | 'CARPETA' | 'USUARIO';
+
+/** Una entrada del historial (coleccion `actividad`). */
+export interface EntradaActividad {
+  _id: string;
+  accion: Accion;
+  recursoTipo: RecursoTipo;
+  recursoId: string | null;
+  /** Denormalizado: sigue legible aunque el recurso ya no exista. */
+  recursoNombre: string;
+  detalle?: string;
+  fecha: string;
+}
+
+/** Usuario tal como lo devuelve GET /api/usuarios (sin passwordHash). */
+export interface Usuario extends UsuarioResumen {
+  email: string;
+  rol: Rol;
+  activo: boolean;
+  almacenamientoUsado: number;
+  creadoEn: string;
+}

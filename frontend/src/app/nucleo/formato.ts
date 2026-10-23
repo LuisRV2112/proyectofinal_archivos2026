@@ -20,3 +20,16 @@ export class BytesPipe implements PipeTransform {
     return formatearBytes(bytes);
   }
 }
+
+/** "ELIMINAR_DEFINITIVO" -> "Eliminar definitivo". */
+export function etiquetaAccion(accion: string): string {
+  const texto = accion.toLowerCase().replaceAll('_', ' ');
+  return texto.charAt(0).toUpperCase() + texto.slice(1);
+}
+
+@Pipe({ name: 'accion' })
+export class AccionPipe implements PipeTransform {
+  transform(accion: string): string {
+    return etiquetaAccion(accion);
+  }
+}

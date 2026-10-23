@@ -1,0 +1,128 @@
+<a class="volver" routerLink="/reportes">‹ Todos los reportes</a>
+
+@if (!definicion()) {
+  <div class="alerta alerta-error">Ese reporte no existe.</div>
+} @else if (prohibido()) {
+  <div class="alerta alerta-error">Este reporte es solo del administrador.</div>
+} @else {
+  @let def = definicion()!;
+  <h1>{{ def.numero }}. {{ def.titulo }}</h1>
+  <p class="secundario descripcion">{{ def.descripcion }}</p>
+
+  <form class="filtros" (ngSubmit)="consultar()">
+    @if (usa('usuario')) {
+      <label class="campo">
+        <span>Usuario</span>
+        <select name="usuarioId" [ngModel]="usuarioId()" (ngModelChange)="usuarioId.set($event)">
+          <option value="">Yo</option>
+          @for (u of usuarios(); track u._id) {
+            <option [value]="u._id">{{ u.username }} — {{ u.nombreCompleto }}</option>
+          }
+        </select>
+      </label>
+    }
+    @if (usa('periodo')) {
+      <label class="campo">
+        <span>Agrupar por</span>
+        <select name="periodo" [ngModel]="periodo()" (ngModelChange)="periodo.set($event)">
+          <option value="day">Día</option>
+          <option value="week">Semana</option>
+          <option value="month">Mes</option>
+          <option value="year">Año</option>
+        </select>
+      </label>
+    }
+    @if (usa('rango')) {
+      <label class="campo">
+        <span>Desde{{ def.rangoObligatorio ? ' *' : '' }}</span>
+        <input type="date" name="desde" [ngModel]="desde()" (ngModelChange)="desde.set($event)" />
+      </label>
+      <label class="campo">
+        <span>Hasta</span>
+        <input type="date" name="hasta" [ngModel]="hasta()" (ngModelChange)="hasta.set($event)" />
+      </label>
+    }
+    @if (usa('extension')) {
+      <label class="campo">
+        <span>Tipo de archivo</span>
+        <select name="extension" [ngModel]="extension()" (ngModelChange)="extension.set($event)">
+          <option value="">Todos</option>
+          <option value="txt">.txt</option>
+          <option value="md">.md</option>
+        </select>
+      </label>
+    }
+    @if (usa('tipo')) {
+      <label class="campo">
+        <span>Recurso</span>
+        <select name="tipo" [ngModel]="tipo()" (ngModelChange)="tipo.set($event)">
+          <option value="">Carpetas y archivos</option>
+          <option value="CARPETA">Solo carpetas</option>
+          <option value="ARCHIVO">Solo archivos</option>
+        </select>
+      </label>
+    }
+    @if (usa('accion')) {
+      <label class="campo">
+        <span>Acción</span>
+        <select name="accion" [ngModel]="accion()" (ngModelChange)="accion.set($event)">
+          <option value="">Todas</option>
+          @for (a of acciones; track a) {
+            <option [value]="a">{{ a | accion }}</option>
+          }
+        </select>
+      </label>
+    }
+    @if (usa('recursoTipo')) {
+      <label class="campo">
+        <span>Tipo de recurso</span>
+        <select name="recursoTipo" [ngModel]="recursoTipo()" (ngModelChange)="recursoTipo.set($event)">
+          <option value="">Todos</option>
+          <option value="ARCHIVO">Archivo</option>
+          <option value="CARPETA">Carpeta</option>
+          <option value="USUARIO">Usuario</option>
+        </select>
+      </label>
+    }
+    @if (usa('limite')) {
+      <label class="campo">
+        <span>Cantidad a mostrar</span>
+        <input type="number" name="limite" min="1" max="100" [ngModel]="limite()" (ngModelChange)="limite.set($event)" />
+      </label>
+    }
+    @if (usa('incluirPapelera')) {
+      <label class="campo casilla">
+        <input type="checkbox" name="incluirPapelera" [ngModel]="incluirPapelera()" (ngModelChange)="incluirPapelera.set($event)" />
+        <span>Incluir la papelera (sigue ocupando espacio)</span>
+      </label>
+    }
+    @if (usa('excluirSesion')) {
+      <label class="campo casilla">
+        <input type="checkbox" name="excluirSesion" [ngModel]="excluirSesion()" (ngModelChange)="excluirSesion.set($event)" />
+        <span>Excluir inicios de sesión</span>
+      </label>
+    }
+    <div class="barra" style="margin: 0">
+      <button class="boton boton-primario" type="submit" [disabled]="cargando()">Consultar</button>
+      @if (def.filtros.length) {
+        <button class="boton" type="button" (click)="limpiar()">Restablecer</button>
+      }
+    </div>
+  </form>
+
+  @if (error()) {
+    <div class="alerta alerta-error">{{ error() }}</div>
+  } @else if (datosActuales(); as datos) {
+    <ng-container *ngComponentOutlet="def.tabla; inputs: { datos: datos }" />
+
+    @if (totalPaginas() > 1) {
+      <div class="paginacion">
+        <button class="boton boton-chico" type="button" [disabled]="pagina() <= 1 || cargando()" (click)="consultar(pagina() - 1)">‹ Anterior</button>
+        <span>Página {{ pagina() }} de {{ totalPaginas() }}</span>
+        <button class="boton boton-chico" type="button" [disabled]="pagina() >= totalPaginas() || cargando()" (click)="consultar(pagina() + 1)">Siguiente ›</button>
+      </div>
+    }
+  } @else if (cargando()) {
+    <p class="secundario">Consultando…</p>
+  }
+}

@@ -7,6 +7,8 @@ import { CompartidoPorMiPagina } from './paginas/compartidos/por-mi';
 import { Explorador } from './paginas/explorador/explorador';
 import { Login } from './paginas/login/login';
 import { PapeleraPagina } from './paginas/papelera/papelera';
+import { ReportesIndice } from './paginas/reportes/indice';
+import { ReportePagina } from './paginas/reportes/reporte';
 import { Pendiente } from './paginas/pendiente/pendiente';
 
 /**
@@ -31,7 +33,10 @@ export const routes: Routes = [
       { path: 'compartidos/conmigo', component: CompartidoConmigoPagina, title: 'Compartido conmigo' },
       { path: 'compartidos/por-mi', component: CompartidoPorMiPagina, title: 'Compartido por mí' },
       { path: 'papelera', component: PapeleraPagina, title: 'Papelera' },
-      { path: 'reportes', component: Pendiente, title: 'Reportes' },
+      { path: 'reportes', component: ReportesIndice, title: 'Reportes' },
+      // :clave elige el reporte del catalogo; los de administrador los
+      // bloquea la vista (y la API con 403), porque comparten la ruta.
+      { path: 'reportes/:clave', component: ReportePagina, title: 'Reporte' },
       { path: 'actividad', component: Pendiente, title: 'Mi actividad' },
       {
         path: 'admin',

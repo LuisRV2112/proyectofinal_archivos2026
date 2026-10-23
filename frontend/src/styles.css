@@ -210,3 +210,31 @@ textarea:focus {
   justify-content: flex-end;
   gap: 8px;
 }
+
+/* --- Reportes: barra proporcional y etiquetas --- */
+.medidor {
+  height: 8px;
+  min-width: 80px;
+  border-radius: 4px;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  overflow: hidden;
+}
+.medidor > span {
+  display: block;
+  height: 100%;
+  background: var(--primario);
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.chip {
+  font-size: 0.78rem;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  white-space: nowrap;
+}
