@@ -41,8 +41,12 @@ A la izquierda está el menú, con tres grupos:
 | Consultas | Reportes, Mi actividad | Todos |
 | Administración | Usuarios, Historial global | Solo el administrador |
 
-Abajo del menú aparecen tu nombre, tu rol, el **espacio que usas** y el botón
-**Cerrar sesión**. Los mensajes de confirmación y de error aparecen como un
+Abajo del menú aparecen tu nombre, tu rol, tu **almacenamiento** y el botón
+**Cerrar sesión**. El almacenamiento muestra el espacio **usado** de tu espacio
+**asignado** (la cuota que fija el administrador, 20 MB por defecto), una
+barra que se pone roja al pasar del 90 % y el espacio **disponible**. Lo que
+está en la papelera también ocupa espacio hasta que lo eliminas
+definitivamente. Los mensajes de confirmación y de error aparecen como un
 aviso en una esquina de la pantalla.
 
 ![CAPTURA: menú lateral de un usuario normal](SS/lateraluser.png)
@@ -66,10 +70,17 @@ cualquiera para volver a ese nivel, o usa **↑ Subir un nivel**.
   texto tal cual. Desde la vista previa también puedes descargarlo.
 - **+ Nueva carpeta:** crea una carpeta dentro de la actual. No puede haber dos
   elementos con el mismo nombre en la misma carpeta.
+- **+ Nuevo archivo:** crea un archivo escribiendo su contenido en la
+  aplicación, sin tenerlo en tu equipo. Escribe el nombre, elige el tipo
+  (`.md` o `.txt`), escribe el contenido y, si quieres, unas etiquetas para
+  encontrarlo después en la búsqueda.
 - **⇪ Subir archivos:** elige uno o varios archivos `.txt` o `.md`, de hasta
   5 MB cada uno. También puedes **arrastrarlos** sobre la lista. Cada subida
-  muestra su progreso; si alguna falla, por ejemplo por un nombre repetido o
-  una extensión no permitida, se explica el motivo junto a ese archivo.
+  muestra su progreso; si alguna falla, por ejemplo por un nombre repetido,
+  una extensión no permitida o **falta de espacio**, se explica el motivo
+  junto a ese archivo.
+
+![CAPTURA: diálogo para crear un archivo nuevo](SS/nuevo-archivo.png)
 - Los elementos que compartiste muestran la etiqueta **Compartido · N**, con el
   número de personas.
 
@@ -177,13 +188,14 @@ fecha y detalle. Se puede filtrar por **acción**, **tipo de recurso** y
 
 La pantalla de reportes muestra una tarjeta por cada reporte disponible. Cada
 uno tiene sus filtros y su tabla de resultados. Un usuario normal ve estos
-cuatro, siempre sobre sus propios datos:
+cinco, siempre sobre sus propios datos:
 
 | # | Reporte |
 |:-:|---|
 | 6 | Recursos compartidos con más usuarios |
 | 7 | Recursos compartidos por un usuario |
 | 8 | Recursos recibidos por un usuario |
+| 13 | Archivos que nunca han sido compartidos: los que nadie más ha podido ver, ni directamente ni a través de su carpeta |
 | 9 | Historial de un usuario por fechas |
 
 ![CAPTURA: índice de reportes de un usuario normal](SS/reportes-usuario.png)
@@ -207,15 +219,18 @@ corresponde a su propietario.
 
 ### 4.2 Usuarios
 
-Lista todas las cuentas con su correo, rol, estado, espacio usado y fecha de
-creación, y se puede filtrar por **rol** y por **estado**.
+Lista todas las cuentas con su correo, rol, estado, **almacenamiento** (usado,
+asignado y libre) y fecha de creación, y se puede filtrar por **rol** y por
+**estado**.
 
 - **+ Nuevo usuario:** nombre de usuario (de 3 a 30 caracteres: minúsculas,
   números, punto, guion o guion bajo), nombre completo, correo, rol y una
   contraseña de al menos 8 caracteres. El nombre de usuario y el correo deben
-  ser únicos.
-- **Editar:** cambia el nombre, el correo, el rol o la contraseña. Si dejas la
-  contraseña vacía, no se cambia. El nombre de usuario no se puede cambiar.
+  ser únicos. También la **cuota de almacenamiento** en MB (20 por defecto):
+  el espacio asignado a esa persona.
+- **Editar:** cambia el nombre, el correo, el rol, la cuota o la contraseña.
+  Si dejas la contraseña vacía, no se cambia. El nombre de usuario no se puede
+  cambiar. La cuota no puede quedar por debajo de lo que la persona ya usa.
 - **Desactivar** (previa confirmación) impide que esa persona inicie sesión,
   pero **no borra nada**: sus documentos, permisos e historial se conservan y la
   cuenta se puede volver a **Activar**.
@@ -236,24 +251,31 @@ Los inicios de sesión fallidos se resaltan en rojo.
 
 ### 4.4 Todos los reportes
 
-El administrador ve los doce reportes, sobre los datos de todo el sistema:
+El administrador ve los catorce reportes, sobre los datos de todo el sistema:
 
 | Grupo | # | Reporte |
 |---|:-:|---|
 | Archivos y almacenamiento | 1 | Archivos por tipo |
 | | 2 | Archivos por rango de fechas |
 | | 3 | Archivos con más operaciones |
+| | 14 | Carpetas con más archivos (directamente o en todo su subárbol) |
 | Usuarios | 4 | Top usuarios por archivos |
 | | 5 | Usuarios que más comparten |
 | Compartición | 6 | Recursos compartidos con más usuarios |
 | | 7 | Recursos compartidos por un usuario |
 | | 8 | Recursos recibidos por un usuario |
+| | 13 | Archivos que nunca han sido compartidos |
 | Actividad | 9 | Historial de un usuario por fechas |
 | | 10 | Operaciones por tipo |
 | | 11 | Operaciones por período (día, semana, mes o año) |
 | | 12 | Principales acciones |
 
-En los reportes 7, 8 y 9 el administrador elige de qué usuario consultar.
+En los reportes 7, 8 y 9 el administrador elige de qué usuario consultar. En el
+13 y el 14 puede elegir un usuario o dejar **Todos**.
+
+![CAPTURA: reporte 13, archivos que nunca han sido compartidos](SS/reporte-nunca-compartidos.png)
+
+![CAPTURA: reporte 14, carpetas con más archivos](SS/reporte-carpetas-mas-archivos.png)
 
 ![CAPTURA: índice de reportes del administrador](SS/reportes-admin.png)
 

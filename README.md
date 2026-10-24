@@ -8,7 +8,8 @@ de una organización. Incluye:
 - permisos que se heredan hacia abajo;
 - papelera con restauración;
 - historial de actividad;
-- doce reportes con *aggregation pipeline*.
+- almacenamiento asignado, usado y disponible por usuario;
+- catorce reportes con *aggregation pipeline*.
 
 | Capa | Tecnología | Puerto |
 |---|---|---|

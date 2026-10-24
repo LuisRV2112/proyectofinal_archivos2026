@@ -32,6 +32,8 @@ código, junto al campo que la implementa.
 | `rol` | String | `ADMINISTRADOR` \| `USUARIO` |
 | `activo` | Boolean | Desactivar no borra nada; solo impide iniciar sesión |
 | `almacenamientoUsado` | Number | Bytes. **Denormalizado** (Computed Pattern, ver §2) |
+| `cuotaAlmacenamiento` | Number | Bytes **asignados**; los fija el administrador (20 MB por defecto, máximo 10 GB). Una subida que no cabe se rechaza |
+| *(virtual)* `almacenamientoDisponible` | Number | `cuota − usado`. **No se guarda**: se calcula al serializar |
 | `creadoEn` | Date | |
 
 ### 1.2 `carpetas`
@@ -173,6 +175,7 @@ sigue legible porque está copiado en `recursoNombre`:
 | Propietario | **Referencia** | El usuario cambia de forma independiente del recurso; duplicar su nombre obligaría a actualizarlo en miles de documentos |
 | `recursoNombre` en actividad | **Denormalizado** | Si el recurso se elimina definitivamente, el historial debe seguir siendo legible |
 | `almacenamientoUsado` | **Denormalizado** | Calcularlo con una agregación en cada consulta sería costoso. Se actualiza en cada subida y eliminación (*Computed Pattern*) |
+| Espacio disponible | **Calculado, no guardado** | Es `cuotaAlmacenamiento − almacenamientoUsado`. Guardarlo sería un segundo dato denormalizado que mantener sincronizado; restar dos campos del mismo documento no cuesta nada |
 
 ### Matices que conviene conocer
 
@@ -193,6 +196,13 @@ sigue legible porque está copiado en `recursoNombre`:
   si alguna carpeta de `archivo.ancestros` está compartida con el usuario:
   una sola consulta por `_id` (`servicios/permisos.js`). Si el usuario llega
   por dos vías, gana el nivel más alto.
+- **Cómo se respeta la cuota con subidas simultáneas.** Antes de escribir en
+  GridFS, la subida *reserva* los bytes con un solo `updateOne` condicionado:
+  `{_id, $expr: {$lte: [{$add: ["$almacenamientoUsado", bytes]}, "$cuotaAlmacenamiento"]}}`
+  con `$inc`. Comprobar y sumar es una operación atómica sobre el documento
+  del usuario, así que dos subidas a la vez no pueden pasarse de la cuota
+  (con "leer, comparar y luego sumar", las dos verían espacio libre). Si
+  después falla GridFS o el insert, la reserva se devuelve.
 - **Por qué `almacenamientoUsado` no baja al enviar a la papelera.** El
   archivo sigue guardado y se puede restaurar, así que sigue ocupando espacio.
   Solo la eliminación definitiva lo descuenta, en la misma operación que borra
@@ -367,6 +377,7 @@ erDiagram
         string rol "ADMINISTRADOR | USUARIO"
         bool activo
         number almacenamientoUsado "denormalizado"
+        number cuotaAlmacenamiento "asignado"
         date creadoEn
     }
     CARPETAS {

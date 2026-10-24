@@ -123,7 +123,7 @@ Base de datos `gestion_documental`, con cuatro colecciones y el bucket GridFS:
 
 | Colección | Qué guarda | Relación con las demás |
 |---|---|---|
-| `usuarios` | Cuentas, rol, estado y `almacenamientoUsado` | Referenciado por `propietarioId`, `usuarioId` y `otorgadoPor` |
+| `usuarios` | Cuentas, rol, estado, `almacenamientoUsado` y `cuotaAlmacenamiento` | Referenciado por `propietarioId`, `usuarioId` y `otorgadoPor` |
 | `carpetas` | Árbol de carpetas por usuario | `padreId` + `ancestros`; embebe `compartidoCon` y `eliminado` |
 | `archivos` | Metadatos de cada archivo | `carpetaId` + `ancestros`; `gridfsId` → `contenido.files`; embebe `compartidoCon` y `eliminado` |
 | `actividad` | Historial de operaciones | `usuarioId` y `recursoId`; `recursoNombre` denormalizado |
@@ -157,15 +157,22 @@ servidor. Hay tres razones:
 **Coherencia al subir** (`servicios/archivos.js → subirArchivo`, y
 `diagramas/secuencia-subir-archivo.drawio`):
 
-1. Se valida todo antes de escribir: la extensión, que el archivo no esté vacío,
-   la carpeta destino (debe ser propia y no estar en la papelera) y que el
-   nombre no se repita entre los hermanos.
-2. Se escribe el contenido en GridFS y se obtiene su `_id`.
-3. Se inserta el documento en `archivos` con ese `gridfsId`. **Si el insert
-   falla, se borra el contenido recién escrito**, para que no quede huérfano en
-   GridFS.
-4. `$inc` de `almacenamientoUsado` en el usuario y registro de `SUBIR` en el
-   historial.
+1. Se valida todo antes de escribir: la extensión, que el contenido sea texto
+   UTF-8 válido, la carpeta destino (debe ser propia y no estar en la papelera)
+   y que el nombre no se repita entre los hermanos.
+2. Se **reserva el espacio** en la cuota del usuario con un `$inc` condicionado
+   a que quepa (ver 3.5). Si no cabe, se responde 409 sin escribir nada.
+3. Se escribe el contenido en GridFS y se obtiene su `_id`.
+4. Se inserta el documento en `archivos` con ese `gridfsId`. **Si el insert
+   falla, se borra el contenido recién escrito** y se devuelve la reserva,
+   para que no quede contenido huérfano en GridFS ni espacio ocupado por nada.
+5. Se registra `SUBIR` en el historial.
+
+**Crear un archivo** escribiendo su contenido en la aplicación usa este mismo
+camino: el frontend arma un archivo con el texto y lo envía al mismo endpoint
+con `origen=editor`. Así crear y subir comparten todas las validaciones y la
+cuota, y en el historial queda "Creado en el editor en /ruta" en lugar de
+"Subido a /ruta".
 
 La descarga (`GET /archivos/:id/descargar`) hace *streaming* desde GridFS
 directo a la respuesta, sin cargar el archivo entero en memoria.
@@ -264,6 +271,26 @@ El riesgo de un dato denormalizado es que se desincronice. Por eso
 `npm run seed:verificar` recalcula la suma desde `archivos` y la compara con el
 campo de cada usuario.
 
+**Almacenamiento asignado, usado y disponible.** Cada usuario tiene una
+`cuotaAlmacenamiento` (bytes asignados) que fija el administrador al crearlo
+o editarlo: 20 MB por defecto, hasta 10 GB. El **disponible** no se guarda: es
+el virtual `almacenamientoDisponible = cuota − usado` del esquema, porque
+guardarlo sería un segundo dato denormalizado que mantener al día.
+
+La cuota se respeta aunque lleguen subidas simultáneas. En lugar de "leer el
+usado, comparar y luego sumar", donde dos subidas verían espacio libre a la
+vez, la comprobación y la suma son **una sola operación atómica**:
+
+```js
+Usuario.updateOne(
+  { _id, $expr: { $lte: [{ $add: ['$almacenamientoUsado', bytes] }, '$cuotaAlmacenamiento'] } },
+  { $inc: { almacenamientoUsado: bytes } }
+)   // modifiedCount 0 → no cabe → 409
+```
+
+Bajar la cuota por debajo de lo que el usuario ya ocupa se rechaza con 409 y se
+dice cuánto usa; la papelera cuenta, porque sigue ocupando espacio.
+
 ### 3.6 Otras decisiones
 
 - **`recursoNombre` denormalizado en `actividad`:** si el recurso se elimina
@@ -296,15 +323,15 @@ caracteres hexadecimales.
 |---|---|---|---|
 | GET | `/salud` | público | Estado de la API y de MongoDB. Responde 503 si la base no contesta |
 | POST | `/auth/login` | público | `{ username, password }` → `{ token, expiraEn, id, username, nombreCompleto, email, rol }`. Registra `LOGIN` o `LOGIN_FALLIDO` |
-| GET | `/auth/yo` | cualquiera | El usuario del token, con su `almacenamientoUsado` |
+| GET | `/auth/yo` | cualquiera | El usuario del token, con su almacenamiento: `cuotaAlmacenamiento` (asignado), `almacenamientoUsado` y `almacenamientoDisponible` |
 
 ### 4.2 Usuarios (solo ADMINISTRADOR)
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| GET | `/usuarios?rol=&activo=` | Lista los usuarios. Nunca incluye `passwordHash` |
-| POST | `/usuarios` | `{ username, email, nombreCompleto, password, rol }`. Responde 201, o 409 si el username o el correo ya existen |
-| PATCH | `/usuarios/:id` | Cualquiera de `{ nombreCompleto, email, rol, password }` |
+| GET | `/usuarios?rol=&activo=` | Lista los usuarios con su almacenamiento asignado, usado y disponible. Nunca incluye `passwordHash` |
+| POST | `/usuarios` | `{ username, email, nombreCompleto, password, rol, cuotaAlmacenamiento? }` (cuota en bytes; 20 MB si se omite). Responde 201, o 409 si el username o el correo ya existen |
+| PATCH | `/usuarios/:id` | Cualquiera de `{ nombreCompleto, email, rol, password, cuotaAlmacenamiento }`. 409 si la cuota queda por debajo de lo usado |
 | PATCH | `/usuarios/:id/estado` | `{ activo: true \| false }` |
 
 ### 4.3 Carpetas
@@ -322,7 +349,7 @@ caracteres hexadecimales.
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| POST | `/archivos` | `multipart/form-data`: `archivo` (`.txt` o `.md`, hasta 5 MB), y opcionales `carpetaId` y `etiquetas` (hasta 10) |
+| POST | `/archivos` | Subir o crear. `multipart/form-data`: `archivo` (`.txt` o `.md`, hasta 5 MB), y opcionales `carpetaId`, `etiquetas` (hasta 10) y `origen` (`subida` \| `editor`). 409 si no cabe en la cuota |
 | GET | `/archivos/buscar` | Filtros: `texto` (índice de texto sobre nombre y etiquetas), `extension`, `carpetaId`, `enSubarbol`, `desde`, `hasta`, `propietarioId`, `pagina`, `limite`. El usuario busca entre lo que puede leer; el administrador, entre todo |
 | GET | `/archivos/:id` | Metadatos, con el nivel de acceso y por qué vía se tiene |
 | GET | `/archivos/:id/descargar` | Descarga (*attachment*) en *streaming* desde GridFS. Registra `DESCARGAR` |
@@ -367,8 +394,9 @@ Acciones registradas: `LOGIN`, `LOGIN_FALLIDO`, `CREAR_USUARIO`,
 
 ### 4.8 Reportes
 
-Los doce se calculan con *aggregation pipeline*, con cada etapa comentada, en
-`servicios/reportes/`. Las fechas `desde` y `hasta` usan el formato
+Los catorce se calculan con *aggregation pipeline*, con cada etapa comentada,
+en `servicios/reportes/`. Del 1 al 12 son los de la sección de reportes del
+proyecto; el 13 y el 14 los pide la hoja de calificación. Las fechas `desde` y `hasta` usan el formato
 `AAAA-MM-DD`.
 
 | # | Ruta (`/reportes/…`) | Rol | Parámetros |
@@ -385,10 +413,25 @@ Los doce se calculan con *aggregation pipeline*, con cada etapa comentada, en
 | 10 | `actividad/por-tipo` | admin | `desde`, `hasta` |
 | 11 | `actividad/por-periodo` | admin | `periodo` = `day` \| `week` \| `month` \| `year` (`$dateTrunc`), `desde`, `hasta` |
 | 12 | `actividad/principales` | admin | `limite` (5 por defecto), `excluirSesion` |
+| 13 | `comparticion/nunca-compartidos` | cualquiera* | `usuarioId`, `extension`, `pagina`, `limite` |
+| 14 | `archivos/carpetas-mas-archivos` | admin | `contar` = `directos` \| `subarbol`, `usuarioId`, `limite` |
 
 \* Un usuario normal solo puede consultarse a sí mismo: si envía el
-`usuarioId` de otro recibe 403. El reporte 6 le muestra solo sus propios
-recursos.
+`usuarioId` de otro recibe 403. Los reportes 6 y 13 le muestran solo sus
+propios recursos.
+
+Dos reportes que se apoyan en el modelo:
+
+- **13 — Archivos que nunca han sido compartidos.** "Nunca" se responde con el
+  **historial**, no con el estado actual: un archivo compartido y luego
+  revocado tiene `compartidoCon` vacío, pero sí fue compartido. Y por la
+  herencia, también cuenta si se compartió alguna carpeta que lo contiene.
+  Gracias a `ancestros` basta **un** `$lookup` a `actividad`: ¿hay alguna
+  entrada `COMPARTIR` cuyo `recursoId` sea el archivo o uno de sus ancestros?
+- **14 — Carpetas con mayor cantidad de archivos.** Un `$lookup` de
+  `carpetas._id` contra `archivos.ancestros` (índice `{ancestros: 1}`) trae los
+  archivos de todo el subárbol, y en la misma pasada distingue los directos
+  (`carpetaId` igual a la carpeta). `contar` elige por cuál se ordena.
 
 Ejemplo:
 
@@ -465,7 +508,8 @@ ocurrido. `npm run seed:verificar` comprueba, contra la base real, que:
 
 - `tamano` coincide con los bytes guardados en GridFS;
 - `ancestros` y `ruta` son correctos respecto de `padreId`;
-- `almacenamientoUsado` es la suma de los archivos de cada usuario;
+- `almacenamientoUsado` es la suma de los archivos de cada usuario y nadie
+  supera su `cuotaAlmacenamiento`;
 - toda carpeta en la papelera tiene su subárbol también en la papelera;
 - el historial está en orden cronológico: nada ocurre antes de que exista el
   recurso o el usuario;
