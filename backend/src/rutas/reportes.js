@@ -1,8 +1,14 @@
 import { Router } from 'express';
 import { autenticar, exigirRol } from '../middleware/autenticacion.js';
-import { archivosConMasOperaciones, archivosPorFecha, archivosPorTipo } from '../servicios/reportes/archivos.js';
+import {
+  archivosConMasOperaciones,
+  archivosPorFecha,
+  archivosPorTipo,
+  carpetasConMasArchivos,
+} from '../servicios/reportes/archivos.js';
 import { topUsuariosPorArchivos, usuariosConMasCompartidos } from '../servicios/reportes/usuarios.js';
 import {
+  archivosNuncaCompartidos,
   compartidosPorUsuario,
   recibidosPorUsuario,
   recursosConMasUsuarios,
@@ -15,7 +21,8 @@ import {
 } from '../servicios/reportes/actividad.js';
 
 /**
- * Reportes (seccion 7 del modelo). Los de archivos y usuarios son solo del
+ * Reportes (seccion 7 del modelo, mas el 13 y el 14 de la hoja de
+ * calificacion). Los de archivos y usuarios son solo del
  * administrador (seccion 6). Los de comparticion los usa cualquiera, pero un
  * usuario normal solo ve los propios (el servicio lo restringe). De actividad,
  * el historial por rango (9) es de cualquiera (el propio); los globales
@@ -36,6 +43,9 @@ router.get('/archivos/por-fecha', soloAdmin, async (req, res) => {
 router.get('/archivos/mas-operaciones', soloAdmin, async (req, res) => {
   res.json(await archivosConMasOperaciones(req.query));
 });
+router.get('/archivos/carpetas-mas-archivos', soloAdmin, async (req, res) => {
+  res.json(await carpetasConMasArchivos(req.query));
+});
 
 // --- Usuarios ---
 router.get('/usuarios/top-archivos', soloAdmin, async (req, res) => {
@@ -54,6 +64,9 @@ router.get('/comparticion/compartidos-por', async (req, res) => {
 });
 router.get('/comparticion/recibidos', async (req, res) => {
   res.json(await recibidosPorUsuario(req.query, req.usuario));
+});
+router.get('/comparticion/nunca-compartidos', async (req, res) => {
+  res.json(await archivosNuncaCompartidos(req.query, req.usuario));
 });
 
 // --- Actividad ---

@@ -21,7 +21,7 @@ function fechaLocal(fecha: Date): string {
 
 /**
  * Vista de UN reporte (/reportes/:clave): sus filtros y su tabla. Que
- * filtros mostrar y que tabla usar sale del catalogo, asi los 12 reportes
+ * filtros mostrar y que tabla usar sale del catalogo, asi los 14 reportes
  * comparten esta pantalla sin un @switch de doce casos.
  */
 @Component({
@@ -65,6 +65,7 @@ export class ReportePagina {
   readonly recursoTipo = signal('');
   readonly periodo = signal('month');
   readonly excluirSesion = signal(false);
+  readonly contar = signal('directos');
 
   /**
    * La respuesta va junto a la clave del reporte que la pidio: al cambiar de
@@ -126,6 +127,7 @@ export class ReportePagina {
     this.recursoTipo.set('');
     this.periodo.set('month');
     this.excluirSesion.set(false);
+    this.contar.set('directos');
   }
 
   private cargarUsuarios() {
@@ -147,6 +149,7 @@ export class ReportePagina {
       ...(usa('recursoTipo') && { recursoTipo: this.recursoTipo() }),
       ...(usa('periodo') && { periodo: this.periodo() }),
       ...(usa('excluirSesion') && { excluirSesion: this.excluirSesion() }),
+      ...(usa('contar') && { contar: this.contar() }),
       ...(definicion.paginado && { pagina, limite: LIMITE_PAGINA }),
     };
   }

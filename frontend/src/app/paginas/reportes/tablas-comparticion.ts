@@ -1,9 +1,10 @@
 import { DatePipe } from '@angular/common';
 import { Component, input } from '@angular/core';
-import { CompartidosPorUsuario, RecibidosPorUsuario, RecursosMasCompartidos } from '../../servicios/reportes';
+import { BytesPipe } from '../../nucleo/formato';
+import { CompartidosPorUsuario, NuncaCompartidos, RecibidosPorUsuario, RecursosMasCompartidos } from '../../servicios/reportes';
 
 /**
- * Tablas de los reportes de COMPARTICION (6 a 8). Mezclan carpetas y
+ * Tablas de los reportes de COMPARTICION (6 a 8, y 13). Mezclan carpetas y
  * archivos: el backend une ambas colecciones con $unionWith.
  */
 
@@ -134,4 +135,42 @@ export class TablaCompartidosPor {
 })
 export class TablaRecibidos {
   readonly datos = input.required<RecibidosPorUsuario>();
+}
+
+/** Reporte 13 — Archivos que nunca han sido compartidos (paginado). */
+@Component({
+  selector: 'app-tabla-nunca-compartidos',
+  imports: [BytesPipe, DatePipe],
+  template: `
+    <p class="secundario">{{ datos().total }} archivo(s) que nadie más ha podido ver</p>
+    <table class="tabla">
+      <thead>
+        <tr>
+          <th>Archivo</th>
+          <th>Propietario</th>
+          <th class="numero">Tamaño</th>
+          <th>Creado</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (a of datos().resultados; track a._id) {
+          <tr>
+            <td>
+              📄 {{ a.nombre }}
+              <div class="secundario ubicacion">{{ a.ubicacion }}</div>
+            </td>
+            <td>{{ a.propietario?.username ?? '—' }}</td>
+            <td class="numero">{{ a.tamano | bytes }}</td>
+            <td>{{ a.creadoEn | date: 'dd/MM/yyyy' }}</td>
+          </tr>
+        } @empty {
+          <tr><td colspan="4" class="secundario">Todos los archivos se han compartido alguna vez.</td></tr>
+        }
+      </tbody>
+    </table>
+  `,
+  styles: `.ubicacion { font-size: 0.82rem; }`,
+})
+export class TablaNuncaCompartidos {
+  readonly datos = input.required<NuncaCompartidos>();
 }

@@ -1,7 +1,7 @@
 import { Type } from '@angular/core';
 import { TablaHistorial, TablaOperacionesPorPeriodo, TablaOperacionesPorTipo, TablaPrincipalesAcciones } from './tablas-actividad';
-import { TablaArchivosMasOperaciones, TablaArchivosPorFecha, TablaArchivosPorTipo } from './tablas-archivos';
-import { TablaCompartidosPor, TablaRecibidos, TablaRecursosMasCompartidos } from './tablas-comparticion';
+import { TablaArchivosMasOperaciones, TablaArchivosPorFecha, TablaArchivosPorTipo, TablaCarpetasMasArchivos } from './tablas-archivos';
+import { TablaCompartidosPor, TablaNuncaCompartidos, TablaRecibidos, TablaRecursosMasCompartidos } from './tablas-comparticion';
 import { TablaTopUsuariosArchivos, TablaUsuariosMasCompartidos } from './tablas-usuarios';
 
 /** Filtros que puede llevar un reporte; cada uno es un parametro de la API. */
@@ -15,7 +15,8 @@ export type Filtro =
   | 'accion'
   | 'recursoTipo'
   | 'periodo'
-  | 'excluirSesion';
+  | 'excluirSesion'
+  | 'contar'; // directos | subarbol
 
 export interface DefinicionReporte {
   clave: string;
@@ -32,13 +33,20 @@ export interface DefinicionReporte {
   rangoObligatorio?: boolean;
   /** Respuesta {total, pagina, limite, resultados}: la pagina la controla la vista. */
   paginado?: boolean;
+  /**
+   * Que significa no elegir usuario (solo administrador): "yo" en los
+   * reportes de un usuario concreto (7 a 9), "todos" en los que por defecto
+   * abarcan el sistema entero (13 y 14).
+   */
+  sinUsuario?: 'yo' | 'todos';
   /** Valor por defecto del filtro "limite". */
   limite?: number;
   tabla: Type<unknown>;
 }
 
 /**
- * Los 12 reportes de la seccion 7. Las pantallas se arman desde esta lista:
+ * Los 12 reportes de la seccion 7 mas el 13 y el 14, que pide la hoja de
+ * calificacion. Las pantallas se arman desde esta lista:
  * agregar un reporte es agregar una entrada y su tabla, sin tocar la vista.
  */
 export const REPORTES: DefinicionReporte[] = [
@@ -77,6 +85,19 @@ export const REPORTES: DefinicionReporte[] = [
     filtros: ['rango', 'limite'],
     limite: 10,
     tabla: TablaArchivosMasOperaciones,
+  },
+  {
+    clave: 'carpetas-mas-archivos',
+    numero: 14,
+    grupo: 'Archivos y almacenamiento',
+    titulo: 'Carpetas con más archivos',
+    descripcion: 'Carpetas ordenadas por cantidad de archivos: los que tienen directamente o en todo su subárbol.',
+    ruta: 'archivos/carpetas-mas-archivos',
+    soloAdmin: true,
+    filtros: ['contar', 'usuario', 'limite'],
+    sinUsuario: 'todos',
+    limite: 10,
+    tabla: TablaCarpetasMasArchivos,
   },
   {
     clave: 'usuarios-top-archivos',
@@ -137,6 +158,20 @@ export const REPORTES: DefinicionReporte[] = [
     filtros: ['usuario', 'tipo'],
     paginado: true,
     tabla: TablaRecibidos,
+  },
+  {
+    clave: 'nunca-compartidos',
+    numero: 13,
+    grupo: 'Compartición',
+    titulo: 'Archivos que nunca han sido compartidos',
+    descripcion:
+      'Archivos que nadie más ha podido ver: nunca se compartieron, ni directamente ni a través de su carpeta. Un usuario ve solo los suyos.',
+    ruta: 'comparticion/nunca-compartidos',
+    soloAdmin: false,
+    filtros: ['usuario', 'extension'],
+    sinUsuario: 'todos',
+    paginado: true,
+    tabla: TablaNuncaCompartidos,
   },
   {
     clave: 'historial',

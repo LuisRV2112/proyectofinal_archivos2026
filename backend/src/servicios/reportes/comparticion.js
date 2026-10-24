@@ -1,4 +1,4 @@
-import { Archivo, Carpeta, Usuario } from '../../modelos/index.js';
+import { Actividad, Archivo, Carpeta, EXTENSIONES_PERMITIDAS, Usuario } from '../../modelos/index.js';
 import { ErrorValidacion } from '../../utilidades/errores.js';
 import { etapasPaginacion, leerEntero, leerPaginacion, respuestaPaginada } from '../../utilidades/consultas.js';
 import { rechazarCamposDesconocidos } from '../../utilidades/validacion.js';
@@ -7,7 +7,7 @@ import { etapasPropietario } from './archivos.js';
 import { leerUsuarioObjetivo } from './comun.js';
 
 /**
- * Reportes de COMPARTICION (6 a 8).
+ * Reportes de COMPARTICION (6 a 8, y 13).
  *
  * Permisos (seccion 6): el administrador ve los de todos; un usuario solo los
  * PROPIOS (lo que el comparte y lo que el recibe).
@@ -195,4 +195,76 @@ export async function recibidosPorUsuario(consulta, usuario) {
   ]);
 
   return { usuario: objetivo, ...respuestaPaginada(resultado, paginacion) };
+}
+
+/**
+ * Reporte 13 — Archivos que nunca han sido compartidos.
+ * GET /api/reportes/comparticion/nunca-compartidos[?usuarioId=&extension=&pagina=&limite=]
+ *
+ * "Nunca" se responde con el HISTORIAL, no con el estado actual: un archivo
+ * que se compartio y luego se revoco tiene `compartidoCon` vacio, pero SI fue
+ * compartido. Y por la herencia de permisos (regla 5.2), compartir una
+ * carpeta comparte todo lo que contiene: tambien cuenta si se compartio
+ * alguna de sus carpetas ancestro. Gracias a `ancestros`, las dos cosas se
+ * resuelven con UN $lookup: ¿hay alguna entrada COMPARTIR cuyo recursoId sea
+ * el archivo o cualquiera de sus ancestros?
+ *
+ * Administrador: todos (o los de ?usuarioId). Usuario: solo los suyos.
+ */
+export async function archivosNuncaCompartidos(consulta, usuario) {
+  rechazarCamposDesconocidos(consulta, ['usuarioId', 'extension', 'pagina', 'limite']);
+  const paginacion = leerPaginacion(consulta, { defecto: 20, maximo: 100 });
+  const filtro = { 'eliminado.estado': false };
+  // Sin ?usuarioId, el administrador ve los de todos; un usuario, los suyos.
+  // leerUsuarioObjetivo da 403 si un usuario pide los de otro.
+  if (usuario.rol !== 'ADMINISTRADOR' || consulta.usuarioId !== undefined) {
+    filtro.propietarioId = (await leerUsuarioObjetivo(consulta, usuario, PROHIBIDO))._id;
+  }
+  if (consulta.extension !== undefined) {
+    const extension = String(consulta.extension).toLowerCase().replace(/^\./, '');
+    if (!EXTENSIONES_PERMITIDAS.includes(extension)) {
+      throw new ErrorValidacion(`Extensión no válida: ${consulta.extension}`, `Valores aceptados: ${EXTENSIONES_PERMITIDAS.join(', ')}`);
+    }
+    filtro.extension = extension;
+  }
+
+  const [resultado] = await Archivo.aggregate([
+    // 1. Archivos activos (con los filtros). Un archivo con permisos vigentes
+    //    ya fue compartido: se descarta aqui sin consultar el historial.
+    { $match: { ...filtro, 'compartidoCon.0': { $exists: false } } },
+    // 2. ¿Alguna vez se compartio el archivo o una carpeta que lo contiene?
+    //    El $match usa el indice {accion: 1} y con una coincidencia basta.
+    {
+      $lookup: {
+        from: Actividad.collection.name,
+        let: { ids: { $concatArrays: [['$_id'], '$ancestros'] } },
+        pipeline: [
+          { $match: { accion: 'COMPARTIR', $expr: { $in: ['$recursoId', '$$ids'] } } },
+          { $limit: 1 },
+          { $project: { _id: 1 } },
+        ],
+        as: 'comparticiones',
+      },
+    },
+    // 3. Solo los que no tienen ninguna.
+    { $match: { comparticiones: { $size: 0 } } },
+    // 4. Los mas antiguos primero: llevan mas tiempo sin compartirse.
+    { $sort: { creadoEn: 1, _id: 1 } },
+    // 5. Pagina, y solo para esas filas: ruta de la carpeta y propietario.
+    ...etapasPaginacion(paginacion, [
+      { $lookup: { from: CARPETAS, localField: 'carpetaId', foreignField: '_id', pipeline: [{ $project: { ruta: 1 } }], as: 'carpeta' } },
+      ...etapasPropietario(),
+      {
+        $project: {
+          nombre: 1,
+          extension: 1,
+          tamano: 1,
+          creadoEn: 1,
+          propietario: 1,
+          ubicacion: { $ifNull: [{ $first: '$carpeta.ruta' }, '/'] },
+        },
+      },
+    ]),
+  ]);
+  return respuestaPaginada([resultado], paginacion);
 }

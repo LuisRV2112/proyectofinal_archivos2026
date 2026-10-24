@@ -14,10 +14,19 @@
       <label class="campo">
         <span>Usuario</span>
         <select name="usuarioId" [ngModel]="usuarioId()" (ngModelChange)="usuarioId.set($event)">
-          <option value="">Yo</option>
+          <option value="">{{ def.sinUsuario === 'todos' ? 'Todos' : 'Yo' }}</option>
           @for (u of usuarios(); track u._id) {
             <option [value]="u._id">{{ u.username }} — {{ u.nombreCompleto }}</option>
           }
+        </select>
+      </label>
+    }
+    @if (usa('contar')) {
+      <label class="campo">
+        <span>Contar archivos</span>
+        <select name="contar" [ngModel]="contar()" (ngModelChange)="contar.set($event)">
+          <option value="directos">Directamente en la carpeta</option>
+          <option value="subarbol">En todo su subárbol</option>
         </select>
       </label>
     }

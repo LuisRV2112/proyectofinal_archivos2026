@@ -8,10 +8,10 @@ import {
   leerRangoFechas,
   respuestaPaginada,
 } from '../../utilidades/consultas.js';
-import { rechazarCamposDesconocidos } from '../../utilidades/validacion.js';
+import { exigirObjectId, rechazarCamposDesconocidos } from '../../utilidades/validacion.js';
 
 /**
- * Reportes de ARCHIVOS Y ALMACENAMIENTO (1 a 3). Solo administrador.
+ * Reportes de ARCHIVOS Y ALMACENAMIENTO (1 a 3, y 14). Solo administrador.
  *
  * Todos se resuelven con aggregation pipeline: el agrupamiento, los conteos
  * y los cruces con otras colecciones ($lookup) los hace MongoDB, y a Node
@@ -227,6 +227,92 @@ export async function archivosConMasOperaciones(consulta) {
         ultimaOperacion: 1,
         // El desglose, de la accion mas frecuente a la menos.
         porAccion: { $sortArray: { input: '$porAccion', sortBy: { cantidad: -1 } } },
+      },
+    },
+  ]);
+}
+
+/**
+ * Reporte 14 — Carpetas con mayor cantidad de archivos.
+ * GET /api/reportes/archivos/carpetas-mas-archivos[?contar=directos|subarbol&usuarioId=&limite=10]
+ *
+ * Cuenta dos cosas por carpeta: los archivos que estan DIRECTAMENTE en ella
+ * y los de TODO su subarbol (subcarpetas incluidas). `?contar` elige por cual
+ * se ordena; por defecto, los directos (si no, las carpetas raiz ganarian
+ * siempre, porque su subarbol lo contiene todo).
+ *
+ * Array of Ancestors en accion: un archivo esta en el subarbol de C si C
+ * aparece en su `ancestros`. El $lookup con localField `_id` y foreignField
+ * `ancestros` busca exactamente eso, usando el indice {ancestros: 1}, y en la
+ * misma pasada distingue los directos (carpetaId = C). Sin el array habria
+ * que recorrer el arbol hacia abajo carpeta por carpeta.
+ *
+ * Los archivos en la papelera no cuentan: ya no estan "en" la carpeta.
+ */
+export async function carpetasConMasArchivos(consulta) {
+  rechazarCamposDesconocidos(consulta, ['contar', 'usuarioId', 'limite']);
+  const limite = leerEntero(consulta.limite, 'limite', { minimo: 1, maximo: 100, defecto: 10 });
+  const contar = consulta.contar ?? 'directos';
+  if (!['directos', 'subarbol'].includes(contar)) {
+    throw new ErrorValidacion(`Valor de "contar" no válido: ${contar}`, 'Usa directos o subarbol');
+  }
+  const filtro = { 'eliminado.estado': false };
+  if (consulta.usuarioId !== undefined) filtro.propietarioId = exigirObjectId(consulta.usuarioId, 'usuarioId');
+
+  const campoOrden = contar === 'directos' ? 'archivosDirectos' : 'archivosSubarbol';
+  return Carpeta.aggregate([
+    // 1. Carpetas activas (de un usuario, si se pidio).
+    { $match: filtro },
+    // 2. Archivos activos de su subarbol, ya resumidos dentro del $lookup:
+    //    a la etapa siguiente llega un solo documento con los totales, no la
+    //    lista de archivos.
+    {
+      $lookup: {
+        from: ARCHIVOS,
+        localField: '_id',
+        foreignField: 'ancestros',
+        let: { carpeta: '$_id' },
+        pipeline: [
+          { $match: { 'eliminado.estado': false } },
+          {
+            $group: {
+              _id: null,
+              subarbol: { $sum: 1 },
+              directos: { $sum: { $cond: [{ $eq: ['$carpetaId', '$$carpeta'] }, 1, 0] } },
+              bytesDirectos: { $sum: { $cond: [{ $eq: ['$carpetaId', '$$carpeta'] }, '$tamano', 0] } },
+              bytesSubarbol: { $sum: '$tamano' },
+            },
+          },
+        ],
+        as: 'conteo',
+      },
+    },
+    // 3. Aplana el conteo; una carpeta sin archivos queda en 0.
+    {
+      $set: {
+        archivosDirectos: { $ifNull: [{ $first: '$conteo.directos' }, 0] },
+        archivosSubarbol: { $ifNull: [{ $first: '$conteo.subarbol' }, 0] },
+        bytesDirectos: { $ifNull: [{ $first: '$conteo.bytesDirectos' }, 0] },
+        bytesSubarbol: { $ifNull: [{ $first: '$conteo.bytesSubarbol' }, 0] },
+      },
+    },
+    // 4. Solo carpetas con al menos un archivo segun el criterio elegido.
+    { $match: { [campoOrden]: { $gt: 0 } } },
+    // 5. Las de mas archivos primero; desempate por el otro conteo y la ruta.
+    { $sort: { [campoOrden]: -1, archivosSubarbol: -1, ruta: 1 } },
+    { $limit: limite },
+    ...etapasPropietario(),
+    {
+      $project: {
+        nombre: 1,
+        ruta: 1,
+        propietario: 1,
+        archivosDirectos: 1,
+        archivosSubarbol: 1,
+        bytesDirectos: 1,
+        bytesSubarbol: 1,
+        // Profundidad = cuantas carpetas tiene por encima.
+        nivel: { $add: [{ $size: '$ancestros' }, 1] },
       },
     },
   ]);

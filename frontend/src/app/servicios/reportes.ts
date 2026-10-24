@@ -71,6 +71,30 @@ export type ArchivosMasOperaciones = {
   porAccion: ConteoAccion[];
 }[];
 
+/** 14. GET archivos/carpetas-mas-archivos */
+export type CarpetasMasArchivos = {
+  _id: string;
+  nombre: string;
+  ruta: string;
+  nivel: number;
+  propietario: UsuarioResumen | null;
+  archivosDirectos: number;
+  archivosSubarbol: number;
+  bytesDirectos: number;
+  bytesSubarbol: number;
+}[];
+
+/** 13. GET comparticion/nunca-compartidos */
+export type NuncaCompartidos = Paginado<{
+  _id: string;
+  nombre: string;
+  extension: 'txt' | 'md';
+  tamano: number;
+  creadoEn: string;
+  ubicacion: string;
+  propietario: UsuarioResumen | null;
+}>;
+
 /** 4. GET usuarios/top-archivos */
 export type TopUsuariosArchivos = {
   posicion: number;
