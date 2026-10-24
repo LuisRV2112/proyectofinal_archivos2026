@@ -6,6 +6,7 @@ import { Observable } from 'rxjs';
 import { Confirmacion } from '../../componentes/confirmacion';
 import { DialogoCompartir } from '../../componentes/dialogo-compartir';
 import { DialogoNombre } from '../../componentes/dialogo-nombre';
+import { DialogoNuevoArchivo, NuevoArchivo } from '../../componentes/dialogo-nuevo-archivo';
 import { SelectorCarpeta } from '../../componentes/selector-carpeta';
 import { VistaPrevia } from '../../componentes/vista-previa';
 import { Autenticacion } from '../../nucleo/autenticacion';
@@ -21,6 +22,7 @@ type Elemento = { tipo: 'carpeta'; dato: Carpeta } | { tipo: 'archivo'; dato: Ar
 /** Dialogo abierto en este momento (como mucho uno). */
 type Dialogo =
   | { tipo: 'crear' }
+  | { tipo: 'nuevoArchivo' }
   | { tipo: 'renombrar'; elemento: Elemento }
   | { tipo: 'mover'; elemento: Elemento }
   | { tipo: 'eliminar'; elemento: Elemento }
@@ -42,7 +44,7 @@ const TAMANO_MAXIMO = 5 * 1024 * 1024;
 
 @Component({
   selector: 'app-explorador',
-  imports: [RouterLink, DatePipe, BytesPipe, Confirmacion, DialogoCompartir, DialogoNombre, SelectorCarpeta, VistaPrevia],
+  imports: [RouterLink, DatePipe, BytesPipe, Confirmacion, DialogoCompartir, DialogoNombre, DialogoNuevoArchivo, SelectorCarpeta, VistaPrevia],
   templateUrl: './explorador.html',
   styleUrl: './explorador.css',
 })
@@ -141,6 +143,11 @@ export class Explorador {
     this.ejecutar(this.documentos.crearCarpeta(nombre, padreId), `Carpeta "${nombre}" creada`);
   }
 
+  crearArchivo({ nombre, contenido, etiquetas }: NuevoArchivo) {
+    const carpetaId = this.contenido()?.carpeta?._id ?? null;
+    this.ejecutar(this.documentos.crearArchivo(nombre, contenido, carpetaId, etiquetas), `Archivo "${nombre}" creado`);
+  }
+
   renombrar(elemento: Elemento, nombre: string) {
     const operacion =
       elemento.tipo === 'carpeta'
@@ -185,6 +192,8 @@ export class Explorador {
         this.dialogo.set(null);
         this.avisos.exito(exito);
         this.cargar();
+        // Crear un archivo ocupa espacio: se refresca el medidor del menu.
+        this.autenticacion.refrescarPerfil();
       },
       error: (e) => {
         this.ocupado.set(false);

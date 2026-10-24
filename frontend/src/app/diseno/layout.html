@@ -15,8 +15,12 @@
       <div class="usuario">
         <strong>{{ sesion.nombreCompleto }}</strong>
         <span class="secundario">{{ sesion.username }} · {{ sesion.rol === 'ADMINISTRADOR' ? 'Administrador' : 'Usuario' }}</span>
-        @if (autenticacion.almacenamientoUsado() !== null) {
-          <span class="secundario">Espacio usado: {{ autenticacion.almacenamientoUsado() | bytes }}</span>
+        @if (autenticacion.almacenamiento(); as a) {
+          <div class="espacio-usuario" [title]="'Asignado: ' + (a.cuotaAlmacenamiento | bytes)">
+            <span class="secundario">Usado {{ a.almacenamientoUsado | bytes }} de {{ a.cuotaAlmacenamiento | bytes }}</span>
+            <div class="medidor"><span [style.width.%]="porcentaje(a)" [class.lleno]="porcentaje(a) >= 90"></span></div>
+            <span class="secundario">Disponible: {{ a.almacenamientoDisponible | bytes }}</span>
+          </div>
         }
         <button class="boton" type="button" (click)="salir()">Cerrar sesión</button>
       </div>

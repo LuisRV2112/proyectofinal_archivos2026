@@ -55,6 +55,16 @@ nav a.activo {
   padding: 12px 8px 0;
   font-size: 0.9rem;
 }
+.espacio-usuario {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 4px;
+}
+/* Casi sin espacio: el medidor cambia de color para que se note. */
+.espacio-usuario .medidor > span.lleno {
+  background: var(--peligro);
+}
 .usuario .boton {
   margin-top: 6px;
 }

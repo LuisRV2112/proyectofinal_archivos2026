@@ -18,7 +18,7 @@ const multerArchivo = multer({
   limits: {
     fileSize: TAMANO_MAXIMO_BYTES,
     files: 1,
-    // Solo se esperan campos cortos (carpetaId, etiquetas).
+    // Solo se esperan campos cortos (carpetaId, etiquetas, origen).
     fields: 5,
     fieldSize: 2 * 1024,
   },

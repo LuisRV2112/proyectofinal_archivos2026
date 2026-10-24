@@ -1,5 +1,6 @@
 import { Component, computed, inject, input, OnInit, output } from '@angular/core';
 import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { BytesPipe } from '../../nucleo/formato';
 import { Rol, Usuario } from '../../nucleo/modelos';
 import { CambiosUsuario, NuevoUsuario } from '../../servicios/usuarios';
 
@@ -10,9 +11,11 @@ import { CambiosUsuario, NuevoUsuario } from '../../servicios/usuarios';
  * (username o correo ya usados) solo las puede hacer la API, y su mensaje
  * llega por el input `error`.
  */
+const MB = 1024 * 1024;
+
 @Component({
   selector: 'app-dialogo-usuario',
-  imports: [ReactiveFormsModule],
+  imports: [ReactiveFormsModule, BytesPipe],
   template: `
     <div class="fondo-dialogo" (click)="cancelar.emit()">
       <form class="dialogo" role="dialog" aria-modal="true" [formGroup]="formulario" (click)="$event.stopPropagation()" (ngSubmit)="enviar()">
@@ -49,6 +52,15 @@ import { CambiosUsuario, NuevoUsuario } from '../../servicios/usuarios';
           </select>
           @if (esUnoMismo()) {
             <small class="secundario">No puedes quitarte a ti mismo el rol de administrador.</small>
+          }
+        </label>
+        <label class="campo">
+          <span>Cuota de almacenamiento (MB)</span>
+          <input type="number" formControlName="cuotaMb" min="0" max="10240" step="any" />
+          @if (invalido('cuotaMb')) {
+            <small class="texto-error">Entre 0 y 10240 MB.</small>
+          } @else if (usuario(); as u) {
+            <small class="secundario">Usa {{ u.almacenamientoUsado | bytes }}: la cuota no puede quedar por debajo.</small>
           }
         </label>
         <label class="campo">
@@ -90,13 +102,15 @@ export class DialogoUsuario implements OnInit {
     nombreCompleto: ['', [Validators.required, Validators.maxLength(100)]],
     email: ['', [Validators.required, Validators.email]],
     rol: ['USUARIO' as Rol],
+    // En MB porque es como lo piensa una persona; la API recibe bytes.
+    cuotaMb: [20, [Validators.required, Validators.min(0), Validators.max(10240)]],
     password: ['', [Validators.minLength(8)]],
   });
 
   ngOnInit() {
     const usuario = this.usuario();
     if (usuario) {
-      this.formulario.patchValue(usuario);
+      this.formulario.patchValue({ ...usuario, cuotaMb: Number((usuario.cuotaAlmacenamiento / MB).toFixed(2)) });
       this.formulario.controls.username.disable();
       if (this.esUnoMismo()) this.formulario.controls.rol.disable();
     } else {
@@ -120,8 +134,10 @@ export class DialogoUsuario implements OnInit {
     }
     const valores = this.formulario.getRawValue();
     const usuario = this.usuario();
+    const { cuotaMb, ...datos } = valores;
+    const cuotaAlmacenamiento = Math.round(cuotaMb * MB);
     if (!usuario) {
-      this.crear.emit({ ...valores, nombreCompleto: valores.nombreCompleto.trim(), email: valores.email.trim() });
+      this.crear.emit({ ...datos, cuotaAlmacenamiento, nombreCompleto: datos.nombreCompleto.trim(), email: datos.email.trim() });
       return;
     }
     // Solo lo que cambio: el historial registra que se modifico, y una
@@ -131,6 +147,9 @@ export class DialogoUsuario implements OnInit {
     if (valores.email.trim().toLowerCase() !== usuario.email) cambios.email = valores.email.trim();
     if (valores.rol !== usuario.rol) cambios.rol = valores.rol;
     if (valores.password) cambios.password = valores.password;
+    // Comparado en MB redondeados: si el admin no toco el campo, no se envia
+    // aunque la cuota guardada no sea un numero exacto de MB.
+    if (cuotaMb !== Number((usuario.cuotaAlmacenamiento / MB).toFixed(2))) cambios.cuotaAlmacenamiento = cuotaAlmacenamiento;
     this.guardar.emit(cambios);
   }
 }

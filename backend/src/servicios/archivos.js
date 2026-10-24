@@ -7,7 +7,7 @@ import {
   renombrarContenido,
   subirContenido,
 } from '../config/gridfs.js';
-import { ErrorApi, ErrorNoEncontrado, ErrorValidacion } from '../utilidades/errores.js';
+import { ErrorApi, ErrorConflicto, ErrorNoEncontrado, ErrorValidacion } from '../utilidades/errores.js';
 import { extensionDe, formatearBytes } from '../utilidades/formato.js';
 import { exigirObjectId, exigirObjeto, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
 import { registrarActividad } from './actividad.js';
@@ -76,8 +76,14 @@ function metadatos(archivo) {
 }
 
 /**
- * POST /api/archivos — multipart con `archivo` y, opcionales, `carpetaId` y
- * `etiquetas`.
+ * POST /api/archivos — multipart con `archivo` y, opcionales, `carpetaId`,
+ * `etiquetas` y `origen`.
+ *
+ * Sirve tanto para SUBIR un archivo del equipo como para CREAR uno escrito
+ * en el editor de la aplicacion (`origen=editor`): el frontend arma el
+ * archivo con el texto y lo envia igual. Un solo camino hacia GridFS hace que
+ * las dos formas pasen por las mismas validaciones (extension, UTF-8, nombre
+ * libre, cuota); `origen` solo cambia como queda descrito en el historial.
  *
  * Orden: primero el contenido a GridFS y despues el documento con su
  * gridfsId. Al reves, existiria un instante en que el documento apunta a un
@@ -92,6 +98,10 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
   }
   const { nombre, extension } = validarNombreArchivo(archivoRecibido.originalname);
   const etiquetas = leerEtiquetas(campos?.etiquetas);
+  const origen = campos?.origen ?? 'subida';
+  if (!['subida', 'editor'].includes(origen)) {
+    throw new ErrorValidacion(`Origen no válido: ${origen}`, 'Valores aceptados: subida, editor');
+  }
 
   // La extension no garantiza que sea texto: un binario renombrado a .txt se
   // detecta porque no es UTF-8 valido.
@@ -108,10 +118,43 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
 
   // El MIME sale de la extension, no de lo que declare el cliente.
   const mimeType = MIME_POR_EXTENSION[extension];
-  const { gridfsId, tamano } = await subirContenido(archivoRecibido.buffer, nombre, {
-    propietarioId: usuario._id,
-    mimeType,
-  });
+
+  // Cuota: se RESERVA el espacio antes de escribir en GridFS, con un $inc
+  // condicionado a que quepa. La comprobacion y la suma son una sola
+  // operacion atomica sobre el documento del usuario, asi que dos subidas
+  // simultaneas no pueden pasarse de la cuota entre las dos (con "leer,
+  // comparar y luego sumar" ambas verian espacio libre). Computed Pattern:
+  // el total se mantiene al dia sumando aqui, en vez de recalcularlo.
+  const bytes = archivoRecibido.buffer.length;
+  const reserva = await Usuario.updateOne(
+    { _id: usuario._id, $expr: { $lte: [{ $add: ['$almacenamientoUsado', bytes] }, '$cuotaAlmacenamiento'] } },
+    { $inc: { almacenamientoUsado: bytes } }
+  );
+  if (reserva.modifiedCount === 0) {
+    const actual = await Usuario.findById(usuario._id);
+    throw new ErrorConflicto(
+      'No tienes espacio suficiente para este archivo',
+      `El archivo ocupa ${formatearBytes(bytes)} y te quedan ${formatearBytes(actual.almacenamientoDisponible)} ` +
+        `de ${formatearBytes(actual.cuotaAlmacenamiento)}. Libera espacio vaciando la papelera.`
+    );
+  }
+  // Si algo falla de aqui en adelante, el espacio reservado se devuelve: si
+  // no, el usuario perderia cuota por un archivo que no existe.
+  const liberarReserva = () =>
+    Usuario.updateOne({ _id: usuario._id }, { $inc: { almacenamientoUsado: -bytes } }).catch((e) =>
+      console.error(`[archivos] No se pudo devolver la reserva de ${bytes} bytes a ${usuario.username}: ${e.message}`)
+    );
+
+  let gridfsId, tamano;
+  try {
+    ({ gridfsId, tamano } = await subirContenido(archivoRecibido.buffer, nombre, {
+      propietarioId: usuario._id,
+      mimeType,
+    }));
+  } catch (error) {
+    await liberarReserva();
+    throw error;
+  }
 
   let archivo;
   try {
@@ -132,13 +175,9 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
     await eliminarContenido(gridfsId).catch((e) =>
       console.error(`[archivos] No se pudo borrar el contenido huérfano ${gridfsId}: ${e.message}`)
     );
+    await liberarReserva();
     throw error;
   }
-
-  // Computed Pattern: el total se mantiene al dia sumando en cada subida, en
-  // vez de recalcularlo con una agregacion cada vez que se consulta. $inc es
-  // atomico, asi que dos subidas simultaneas no se pisan.
-  await Usuario.updateOne({ _id: usuario._id }, { $inc: { almacenamientoUsado: tamano } });
 
   await registrarActividad({
     usuarioId: usuario._id,
@@ -146,7 +185,7 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
     recursoTipo: 'ARCHIVO',
     recursoId: archivo._id,
     recursoNombre: archivo.nombre,
-    detalle: `Subido a ${carpeta?.ruta ?? 'la raíz'} (${formatearBytes(tamano)})`,
+    detalle: `${origen === 'editor' ? 'Creado en el editor en' : 'Subido a'} ${carpeta?.ruta ?? 'la raíz'} (${formatearBytes(tamano)})`,
   });
   return metadatos(archivo);
 }

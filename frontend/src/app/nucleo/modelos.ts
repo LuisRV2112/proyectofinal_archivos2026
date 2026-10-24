@@ -186,10 +186,20 @@ export interface EntradaActividad {
 }
 
 /** Usuario tal como lo devuelve GET /api/usuarios (sin passwordHash). */
-export interface Usuario extends UsuarioResumen {
+/**
+ * Espacio de un usuario, en bytes. `cuota` la asigna el administrador,
+ * `usado` es el dato denormalizado y `disponible` lo calcula el backend
+ * (cuota - usado); el frontend no lo recalcula, para tener una sola regla.
+ */
+export interface Almacenamiento {
+  almacenamientoUsado: number;
+  cuotaAlmacenamiento: number;
+  almacenamientoDisponible: number;
+}
+
+export interface Usuario extends UsuarioResumen, Almacenamiento {
   email: string;
   rol: Rol;
   activo: boolean;
-  almacenamientoUsado: number;
   creadoEn: string;
 }

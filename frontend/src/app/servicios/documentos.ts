@@ -70,6 +70,22 @@ export class Documentos {
     return this.http.post<Archivo>(`${URL_API}/archivos`, datos, { reportProgress: true, observe: 'events' });
   }
 
+  /**
+   * Crear un archivo con texto escrito en la aplicacion. Va al mismo
+   * POST /api/archivos que la subida, como un archivo armado en el navegador:
+   * asi pasa por las mismas validaciones (extension, nombre, cuota) y GridFS.
+   * `origen=editor` solo cambia como lo describe el historial.
+   */
+  crearArchivo(nombre: string, contenido: string, carpetaId: string | null, etiquetas = ''): Observable<Archivo> {
+    const tipo = nombre.toLowerCase().endsWith('.md') ? 'text/markdown' : 'text/plain';
+    const datos = new FormData();
+    datos.append('archivo', new File([contenido], nombre, { type: tipo }), nombre);
+    if (carpetaId) datos.append('carpetaId', carpetaId);
+    if (etiquetas) datos.append('etiquetas', etiquetas);
+    datos.append('origen', 'editor');
+    return this.http.post<Archivo>(`${URL_API}/archivos`, datos);
+  }
+
   /** Texto del archivo para la vista previa. */
   texto(id: string): Observable<string> {
     return this.http.get(`${URL_API}/archivos/${id}/contenido`, { responseType: 'text' });

@@ -1,6 +1,7 @@
 import bcrypt from 'bcrypt';
-import { Usuario, ROLES } from '../modelos/index.js';
+import { Usuario, ROLES, CUOTA_MAXIMA, CUOTA_POR_DEFECTO } from '../modelos/index.js';
 import { ErrorConflicto, ErrorNoEncontrado, ErrorValidacion } from '../utilidades/errores.js';
+import { formatearBytes } from '../utilidades/formato.js';
 import { exigirObjectId, exigirObjeto, exigirTexto, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
 import { registrarActividad } from './actividad.js';
 
@@ -13,6 +14,17 @@ function validarPassword(password) {
   if (typeof password !== 'string' || password.length < LONGITUD_MINIMA_PASSWORD) {
     throw new ErrorValidacion(`La contraseña debe tener al menos ${LONGITUD_MINIMA_PASSWORD} caracteres`);
   }
+}
+
+/** Cuota en bytes: entero entre 0 y CUOTA_MAXIMA. */
+function leerCuota(valor) {
+  if (!Number.isInteger(valor) || valor < 0 || valor > CUOTA_MAXIMA) {
+    throw new ErrorValidacion(
+      'La cuota de almacenamiento no es válida',
+      `Debe ser un número entero de bytes entre 0 y ${CUOTA_MAXIMA} (${formatearBytes(CUOTA_MAXIMA)})`
+    );
+  }
+  return valor;
 }
 
 function validarRol(rol) {
@@ -61,7 +73,7 @@ export async function listarUsuarios(consulta = {}) {
 
 export async function crearUsuario(cuerpo, admin) {
   exigirObjeto(cuerpo);
-  rechazarCamposDesconocidos(cuerpo, ['username', 'email', 'password', 'nombreCompleto', 'rol']);
+  rechazarCamposDesconocidos(cuerpo, ['username', 'email', 'password', 'nombreCompleto', 'rol', 'cuotaAlmacenamiento']);
 
   const username = exigirTexto(cuerpo.username, 'username').toLowerCase();
   const email = exigirTexto(cuerpo.email, 'email').toLowerCase();
@@ -69,6 +81,7 @@ export async function crearUsuario(cuerpo, admin) {
   const rol = cuerpo.rol ?? 'USUARIO';
   validarRol(rol);
   validarPassword(cuerpo.password);
+  const cuotaAlmacenamiento = cuerpo.cuotaAlmacenamiento === undefined ? CUOTA_POR_DEFECTO : leerCuota(cuerpo.cuotaAlmacenamiento);
   await validarUnicidad({ username, email });
 
   // El resto de reglas de formato (longitud y caracteres del username,
@@ -79,6 +92,7 @@ export async function crearUsuario(cuerpo, admin) {
     email,
     nombreCompleto,
     rol,
+    cuotaAlmacenamiento,
     passwordHash: await bcrypt.hash(cuerpo.password, COSTO_BCRYPT),
   });
 
@@ -88,7 +102,7 @@ export async function crearUsuario(cuerpo, admin) {
     recursoTipo: 'USUARIO',
     recursoId: nuevo._id,
     recursoNombre: nuevo.username,
-    detalle: `Creado con rol ${nuevo.rol}`,
+    detalle: `Creado con rol ${nuevo.rol} y cuota de ${formatearBytes(nuevo.cuotaAlmacenamiento)}`,
   });
   return nuevo;
 }
@@ -96,11 +110,11 @@ export async function crearUsuario(cuerpo, admin) {
 /**
  * Modifica datos de un usuario. El username no se cambia: es el
  * identificador de inicio de sesion y aparece en el historial.
- * `almacenamientoUsado` tampoco: lo calcula el servidor.
+ * `almacenamientoUsado` tampoco: lo calcula el servidor. La cuota si.
  */
 export async function actualizarUsuario(id, cuerpo, admin) {
   exigirObjeto(cuerpo);
-  rechazarCamposDesconocidos(cuerpo, ['email', 'nombreCompleto', 'rol', 'password']);
+  rechazarCamposDesconocidos(cuerpo, ['email', 'nombreCompleto', 'rol', 'password', 'cuotaAlmacenamiento']);
   if (Object.keys(cuerpo).length === 0) throw new ErrorValidacion('No se envió ningún campo para modificar');
 
   const usuario = await buscarUsuario(id);
@@ -125,6 +139,21 @@ export async function actualizarUsuario(id, cuerpo, admin) {
     }
     if (cuerpo.rol !== usuario.rol) cambios.push(`rol ${usuario.rol} → ${cuerpo.rol}`);
     usuario.rol = cuerpo.rol;
+  }
+  if (cuerpo.cuotaAlmacenamiento !== undefined) {
+    const cuota = leerCuota(cuerpo.cuotaAlmacenamiento);
+    // Bajarla por debajo de lo que ya ocupa dejaria al usuario "excedido" sin
+    // forma de saber cuanto debe borrar: se rechaza y se dice cuanto usa.
+    if (cuota < usuario.almacenamientoUsado) {
+      throw new ErrorConflicto(
+        'La cuota no puede ser menor que el espacio que el usuario ya ocupa',
+        `Usa ${formatearBytes(usuario.almacenamientoUsado)} (la papelera también cuenta)`
+      );
+    }
+    if (cuota !== usuario.cuotaAlmacenamiento) {
+      cambios.push(`cuota ${formatearBytes(usuario.cuotaAlmacenamiento)} → ${formatearBytes(cuota)}`);
+    }
+    usuario.cuotaAlmacenamiento = cuota;
   }
   if (cuerpo.password !== undefined) {
     validarPassword(cuerpo.password);

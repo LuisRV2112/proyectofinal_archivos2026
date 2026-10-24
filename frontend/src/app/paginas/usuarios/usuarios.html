@@ -50,7 +50,10 @@
           <td>
             <span class="estado" [class.activo]="u.activo" [class.inactivo]="!u.activo">{{ u.activo ? 'Activo' : 'Desactivado' }}</span>
           </td>
-          <td class="numero">{{ u.almacenamientoUsado | bytes }}</td>
+          <td class="numero">
+            {{ u.almacenamientoUsado | bytes }}
+            <div class="secundario">de {{ u.cuotaAlmacenamiento | bytes }} · libre {{ u.almacenamientoDisponible | bytes }}</div>
+          </td>
           <td>{{ u.creadoEn | date: 'dd/MM/yyyy' }}</td>
           <td>
             <div class="acciones">

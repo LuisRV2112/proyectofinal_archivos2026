@@ -20,6 +20,7 @@
   }
   @if (esPropio()) {
     <button class="boton" type="button" (click)="abrirDialogo({ tipo: 'crear' })">+ Nueva carpeta</button>
+    <button class="boton" type="button" (click)="abrirDialogo({ tipo: 'nuevoArchivo' })">+ Nuevo archivo</button>
     <label class="boton boton-primario">
       ⇪ Subir archivos
       <input type="file" accept=".txt,.md" multiple hidden (change)="alElegirArchivos($event)" />
@@ -125,7 +126,7 @@
           <tr>
             <td colspan="5" class="vacio secundario">
               Esta carpeta está vacía.
-              @if (esPropio()) { Arrastra archivos .txt o .md aquí, o usa «Subir archivos». }
+              @if (esPropio()) { Arrastra archivos .txt o .md aquí, usa «Subir archivos» o crea uno con «Nuevo archivo». }
             </td>
           </tr>
         }
@@ -138,6 +139,9 @@
   @if (d.tipo === 'crear') {
     <app-dialogo-nombre titulo="Nueva carpeta" textoBoton="Crear" [ocupado]="ocupado()" [error]="errorDialogo()"
       (guardar)="crearCarpeta($event)" (cancelar)="cerrarDialogo()" />
+  } @else if (d.tipo === 'nuevoArchivo') {
+    <app-dialogo-nuevo-archivo [ocupado]="ocupado()" [error]="errorDialogo()"
+      (crear)="crearArchivo($event)" (cancelar)="cerrarDialogo()" />
   } @else if (d.tipo === 'renombrar') {
     <app-dialogo-nombre [titulo]="'Renombrar ' + (d.elemento.tipo === 'carpeta' ? 'carpeta' : 'archivo')"
       [valorInicial]="d.elemento.dato.nombre" [ocupado]="ocupado()" [error]="errorDialogo()"

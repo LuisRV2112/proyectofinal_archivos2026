@@ -3,6 +3,7 @@ import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/rou
 import { Autenticacion } from '../nucleo/autenticacion';
 import { Avisos } from '../nucleo/avisos';
 import { BytesPipe } from '../nucleo/formato';
+import { Almacenamiento } from '../nucleo/modelos';
 
 interface OpcionMenu {
   ruta: string;
@@ -66,6 +67,12 @@ export class Layout implements OnInit {
 
   ngOnInit() {
     this.autenticacion.refrescarPerfil();
+  }
+
+  /** Porcentaje de la cuota en uso, para el medidor (0 a 100). */
+  porcentaje(a: Almacenamiento) {
+    if (a.cuotaAlmacenamiento <= 0) return 100;
+    return Math.min(100, Math.round((a.almacenamientoUsado / a.cuotaAlmacenamiento) * 100));
   }
 
   salir() {

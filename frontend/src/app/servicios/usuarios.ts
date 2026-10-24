@@ -10,6 +10,8 @@ export interface NuevoUsuario {
   nombreCompleto: string;
   rol: Rol;
   password: string;
+  /** Bytes asignados; si se omite, el backend aplica la cuota por defecto (20 MB). */
+  cuotaAlmacenamiento?: number;
 }
 
 /** El username no se modifica: es el identificador de inicio de sesion. */

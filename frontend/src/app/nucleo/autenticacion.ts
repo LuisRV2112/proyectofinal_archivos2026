@@ -2,7 +2,7 @@ import { HttpClient } from '@angular/common/http';
 import { computed, inject, Injectable, signal } from '@angular/core';
 import { Observable, tap } from 'rxjs';
 import { URL_API } from './configuracion';
-import { Sesion } from './modelos';
+import { Almacenamiento, Sesion } from './modelos';
 
 const CLAVE_SESION = 'gestion-documental.sesion';
 
@@ -26,8 +26,8 @@ export class Autenticacion {
   readonly sesion = signal<Sesion | null>(leerSesionGuardada());
   readonly haySesion = computed(() => this.sesion() !== null);
   readonly esAdministrador = computed(() => this.sesion()?.rol === 'ADMINISTRADOR');
-  /** Bytes usados (dato denormalizado del usuario); se refresca tras subir o borrar. */
-  readonly almacenamientoUsado = signal<number | null>(null);
+  /** Espacio asignado, usado y disponible; se refresca tras subir o borrar. */
+  readonly almacenamiento = signal<Almacenamiento | null>(null);
 
   iniciarSesion(username: string, password: string): Observable<Sesion> {
     return this.http.post<Sesion>(`${URL_API}/auth/login`, { username, password }).pipe(
@@ -41,15 +41,16 @@ export class Autenticacion {
   cerrarSesion() {
     localStorage.removeItem(CLAVE_SESION);
     this.sesion.set(null);
-    this.almacenamientoUsado.set(null);
+    this.almacenamiento.set(null);
   }
 
   /** GET /api/auth/yo: datos actuales del usuario, incluido su almacenamiento. */
   refrescarPerfil() {
-    type Perfil = Pick<Sesion, 'nombreCompleto' | 'email'> & { almacenamientoUsado: number };
+    type Perfil = Pick<Sesion, 'nombreCompleto' | 'email'> & Almacenamiento;
     this.http.get<Perfil>(`${URL_API}/auth/yo`).subscribe({
       next: (perfil) => {
-        this.almacenamientoUsado.set(perfil.almacenamientoUsado);
+        const { almacenamientoUsado, cuotaAlmacenamiento, almacenamientoDisponible } = perfil;
+        this.almacenamiento.set({ almacenamientoUsado, cuotaAlmacenamiento, almacenamientoDisponible });
         // Nombre y correo pueden haber cambiado (el admin se edito a si mismo).
         const sesion = this.sesion();
         if (sesion && (sesion.nombreCompleto !== perfil.nombreCompleto || sesion.email !== perfil.email)) {

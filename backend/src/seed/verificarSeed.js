@@ -117,6 +117,10 @@ async function principal() {
     .filter(([u, suma]) => u.almacenamientoUsado !== suma)
     .map(([u, suma]) => `${u.username}: guardado ${u.almacenamientoUsado}, suma real ${suma}`);
   comprobar('`almacenamientoUsado` = suma de sus archivos (papelera incluida)', errAlm);
+  comprobar(
+    'Nadie supera su `cuotaAlmacenamiento`',
+    usuarios.filter((u) => !(u.cuotaAlmacenamiento >= u.almacenamientoUsado)).map((u) => `${u.username}: usa ${u.almacenamientoUsado} de ${u.cuotaAlmacenamiento}`)
+  );
 
   console.log('\nPermisos');
   const errPermisos = [];
