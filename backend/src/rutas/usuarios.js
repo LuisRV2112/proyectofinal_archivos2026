@@ -4,7 +4,7 @@ import { actualizarUsuario, cambiarEstadoUsuario, crearUsuario, listarUsuarios }
 
 const router = Router();
 
-// Toda la gestion de usuarios es exclusiva del administrador (seccion 6).
+// Solo administrador.
 router.use(autenticar, exigirRol('ADMINISTRADOR'));
 
 router.get('/', async (req, res) => {

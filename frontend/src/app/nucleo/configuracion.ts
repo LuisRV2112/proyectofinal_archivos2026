@@ -1,5 +1,2 @@
-/**
- * Direccion de la API. El frontend nunca habla con MongoDB: todo pasa por el
- * backend Express, que es el unico que conoce la base de datos.
- */
+// El frontend solo habla con la API, nunca con MongoDB.
 export const URL_API = 'http://localhost:3000/api';

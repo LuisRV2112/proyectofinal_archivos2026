@@ -32,13 +32,11 @@ export class Login {
     this.error.set(null);
     this.autenticacion.iniciarSesion(username.trim(), password).subscribe({
       next: () => {
-        // Vuelve a la pagina que se pidio antes de que el guard mandara aqui.
+        // Vuelve a la pagina que se habia pedido.
         const volver = this.ruta.snapshot.queryParamMap.get('volver');
         this.router.navigateByUrl(volver && volver.startsWith('/') && !volver.startsWith('/login') ? volver : '/');
       },
       error: (error) => {
-        // La API da el mismo mensaje para usuario inexistente y contrasena
-        // incorrecta (no revela que usernames existen): se muestra tal cual.
         this.error.set(mensajeDeError(error));
         this.cargando.set(false);
       },

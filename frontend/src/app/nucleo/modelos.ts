@@ -1,8 +1,8 @@
-/** Tipos de las respuestas de la API que usa mas de una pantalla. */
+// Tipos de las respuestas de la API.
 
 export type Rol = 'ADMINISTRADOR' | 'USUARIO';
 
-/** Lo que devuelve POST /api/auth/login (sin passwordHash: el backend nunca lo envia). */
+// POST /api/auth/login
 export interface Sesion {
   token: string;
   expiraEn: string;
@@ -13,7 +13,7 @@ export interface Sesion {
   rol: Rol;
 }
 
-/** Formato de error comun de la API (middleware de errores del backend). */
+// Formato de error de la API.
 export interface ErrorApi {
   estado: number;
   error: string;
@@ -24,7 +24,7 @@ export interface ErrorApi {
 export type Nivel = 'LECTURA' | 'COMENTARIO' | 'EDICION';
 export type NivelAcceso = Nivel | 'PROPIETARIO';
 
-/** Permiso EMBEBIDO en el recurso (compartidoCon). */
+// Embebido en compartidoCon.
 export interface Permiso {
   usuarioId: string;
   nivel: Nivel;
@@ -53,11 +53,11 @@ export interface Archivo extends Recurso {
   tamano: number;
   carpetaId: string | null;
   etiquetas: string[];
-  /** Ruta de su carpeta; la agregan la busqueda y el detalle. */
+  // Solo en la busqueda y el detalle.
   ubicacion?: string;
 }
 
-/** Como llega el usuario a un recurso: propio, compartido directo o heredado. */
+// via: propietario, directo, heredado o administrador.
 export interface Acceso {
   nivel: NivelAcceso;
   via: string;
@@ -69,7 +69,7 @@ export interface Miga {
   ruta: string;
 }
 
-/** GET /api/carpetas/raiz y GET /api/carpetas/:id */
+// GET /api/carpetas/raiz y /api/carpetas/:id
 export interface ContenidoCarpeta {
   carpeta: Carpeta | null;
   acceso: Acceso;
@@ -85,21 +85,19 @@ export interface Paginado<T> {
   resultados: T[];
 }
 
-/** Datos publicos de un usuario (lo que la API expone al compartir). */
 export interface UsuarioResumen {
   _id: string;
   username: string;
   nombreCompleto: string;
 }
 
-/** Recurso sobre el que se gestionan permisos; la API usa "carpetas" | "archivos". */
 export interface RecursoCompartible {
   tipo: 'carpeta' | 'archivo';
   _id: string;
   nombre: string;
 }
 
-/** GET /api/recursos/:tipo/:id/compartir (usuarioId y otorgadoPor poblados). */
+// GET /api/recursos/:tipo/:id/compartir, con populate.
 export interface PermisoDetallado {
   usuarioId: UsuarioResumen;
   nivel: Nivel;
@@ -107,24 +105,24 @@ export interface PermisoDetallado {
   otorgadoEn: string;
 }
 
-/** GET /api/compartidos/conmigo: el recurso con SU nivel (no con quien mas esta compartido). */
+// GET /api/compartidos/conmigo: solo trae el nivel del usuario.
 export type CompartidoConmigo = (
   | ({ tipo: 'CARPETA' } & Omit<Carpeta, 'compartidoCon' | 'propietarioId'>)
   | ({ tipo: 'ARCHIVO' } & Omit<Archivo, 'compartidoCon' | 'propietarioId'>)
 ) & { propietario: UsuarioResumen; nivel: Nivel; otorgadoEn: string };
 
-/** GET /api/compartidos/por-mi: recursos propios con sus permisos (usuarios poblados). */
+// GET /api/compartidos/por-mi
 export type CompartidoPorMi = (
   | ({ tipo: 'CARPETA' } & Omit<Carpeta, 'compartidoCon'>)
   | ({ tipo: 'ARCHIVO' } & Omit<Archivo, 'compartidoCon'>)
 ) & { compartidoCon: (Omit<Permiso, 'usuarioId'> & { usuarioId: UsuarioResumen })[] };
 
-/** GET /api/papelera: solo las raices de cada eliminacion. */
+// GET /api/papelera: solo la raiz de cada eliminacion.
 export type ElementoPapelera = {
   _id: string;
   nombre: string;
   eliminadoEn: string;
-  /** null si la carpeta de origen ya no existe. */
+  // null si la carpeta de origen ya no existe
   ubicacionOriginal: string | null;
 } & (
   | { tipo: 'CARPETA'; contiene: { carpetas: number; archivos: number; bytes: number } }
@@ -149,7 +147,7 @@ export interface ResultadoEliminacionDefinitiva {
   bytesLiberados: number;
 }
 
-/** Acciones del historial (enum ACCIONES del modelo Actividad del backend). */
+// Igual que ACCIONES en el modelo Actividad del backend.
 export const ACCIONES = [
   'LOGIN',
   'LOGIN_FALLIDO',
@@ -173,24 +171,18 @@ export const ACCIONES = [
 export type Accion = (typeof ACCIONES)[number];
 export type RecursoTipo = 'ARCHIVO' | 'CARPETA' | 'USUARIO';
 
-/** Una entrada del historial (coleccion `actividad`). */
 export interface EntradaActividad {
   _id: string;
   accion: Accion;
   recursoTipo: RecursoTipo;
   recursoId: string | null;
-  /** Denormalizado: sigue legible aunque el recurso ya no exista. */
+  // Denormalizado: sigue legible si el recurso se borra.
   recursoNombre: string;
   detalle?: string;
   fecha: string;
 }
 
-/** Usuario tal como lo devuelve GET /api/usuarios (sin passwordHash). */
-/**
- * Espacio de un usuario, en bytes. `cuota` la asigna el administrador,
- * `usado` es el dato denormalizado y `disponible` lo calcula el backend
- * (cuota - usado); el frontend no lo recalcula, para tener una sola regla.
- */
+// Bytes. El disponible lo calcula el backend, aqui no se recalcula.
 export interface Almacenamiento {
   almacenamientoUsado: number;
   cuotaAlmacenamiento: number;

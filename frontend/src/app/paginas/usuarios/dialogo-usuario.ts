@@ -4,14 +4,10 @@ import { BytesPipe } from '../../nucleo/formato';
 import { Rol, Usuario } from '../../nucleo/modelos';
 import { CambiosUsuario, NuevoUsuario } from '../../servicios/usuarios';
 
-/**
- * Crear o editar un usuario. Las validaciones replican las del esquema del
- * backend (longitud y caracteres del username, formato del correo, 8
- * caracteres de contrasena) para avisar antes de enviar; las de unicidad
- * (username o correo ya usados) solo las puede hacer la API, y su mensaje
- * llega por el input `error`.
- */
 const MB = 1024 * 1024;
+
+// Repite las validaciones del esquema para avisar antes de enviar. Los
+// duplicados solo los detecta la API y llegan por el input error.
 
 @Component({
   selector: 'app-dialogo-usuario',
@@ -124,8 +120,7 @@ export class DialogoUsuario implements OnInit {
   }
 
   enviar() {
-    // El username se pasa a minusculas igual que hace el backend, para que la
-    // validacion del patron no rechace "MGarcia".
+    // A minusculas, igual que el backend.
     const username = this.formulario.controls.username;
     if (username.enabled) username.setValue(username.value.trim().toLowerCase());
     if (this.formulario.invalid) {
@@ -140,15 +135,13 @@ export class DialogoUsuario implements OnInit {
       this.crear.emit({ ...datos, cuotaAlmacenamiento, nombreCompleto: datos.nombreCompleto.trim(), email: datos.email.trim() });
       return;
     }
-    // Solo lo que cambio: el historial registra que se modifico, y una
-    // contrasena vacia significa "dejarla como esta".
+    // Solo lo que cambio; contrasena vacia = no cambiarla.
     const cambios: CambiosUsuario = {};
     if (valores.nombreCompleto.trim() !== usuario.nombreCompleto) cambios.nombreCompleto = valores.nombreCompleto.trim();
     if (valores.email.trim().toLowerCase() !== usuario.email) cambios.email = valores.email.trim();
     if (valores.rol !== usuario.rol) cambios.rol = valores.rol;
     if (valores.password) cambios.password = valores.password;
-    // Comparado en MB redondeados: si el admin no toco el campo, no se envia
-    // aunque la cuota guardada no sea un numero exacto de MB.
+    // Se compara en MB redondeados.
     if (cuotaMb !== Number((usuario.cuotaAlmacenamiento / MB).toFixed(2))) cambios.cuotaAlmacenamiento = cuotaAlmacenamiento;
     this.guardar.emit(cambios);
   }

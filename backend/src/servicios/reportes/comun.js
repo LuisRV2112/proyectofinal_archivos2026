@@ -2,11 +2,7 @@ import { Usuario } from '../../modelos/index.js';
 import { ErrorNoEncontrado, ErrorProhibido } from '../../utilidades/errores.js';
 import { exigirObjectId } from '../../utilidades/validacion.js';
 
-/**
- * Usuario sobre el que se pide un reporte o historial (?usuarioId). Un usuario
- * normal solo puede pedir el suyo (y es el valor por defecto); el
- * administrador, cualquiera (seccion 6: "propios" / "su propio historial").
- */
+// ?usuarioId: el usuario normal solo el suyo, el administrador cualquiera.
 export async function leerUsuarioObjetivo(consulta, usuario, mensajeProhibido) {
   if (consulta.usuarioId === undefined) return usuario;
   const id = exigirObjectId(consulta.usuarioId, 'usuarioId');

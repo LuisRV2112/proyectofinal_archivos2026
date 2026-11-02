@@ -4,15 +4,12 @@ import { Observable } from 'rxjs';
 import { URL_API } from '../nucleo/configuracion';
 import { Accion, EntradaActividad, Paginado, RecursoTipo, UsuarioResumen } from '../nucleo/modelos';
 
-/**
- * Reportes (GET /api/reportes/...). Todos los calcula MongoDB con un
- * aggregation pipeline; el frontend solo arma los filtros y pinta la tabla.
- */
+// Los reportes los calcula MongoDB; aqui solo se envian los filtros.
 @Injectable({ providedIn: 'root' })
 export class Reportes {
   private readonly http = inject(HttpClient);
 
-  /** `ruta` relativa a /api/reportes; los filtros vacios no se envian. */
+  // Los filtros vacios no se envian.
   consultar<T>(ruta: string, filtros: Record<string, string | number | boolean | null | undefined>): Observable<T> {
     let params = new HttpParams();
     for (const [clave, valor] of Object.entries(filtros)) {
@@ -22,7 +19,7 @@ export class Reportes {
   }
 }
 
-// --- Forma de la respuesta de cada reporte ---
+// Respuesta de cada reporte
 
 type TipoRecurso = 'CARPETA' | 'ARCHIVO';
 
@@ -62,7 +59,7 @@ export type ArchivosMasOperaciones = {
   archivoId: string;
   nombre: string;
   extension?: 'txt' | 'md';
-  /** false = eliminado definitivamente: el nombre sale del historial. */
+  // false = eliminado definitivamente
   existe: boolean;
   enPapelera: boolean;
   propietario?: UsuarioResumen | null;
@@ -121,7 +118,7 @@ export type UsuariosMasCompartidos = {
   usuariosDistintos: number;
 }[];
 
-/** Recurso de los reportes de comparticion (carpeta o archivo, via $unionWith). */
+// Carpeta o archivo
 interface RecursoReporte {
   _id: string;
   nombre: string;

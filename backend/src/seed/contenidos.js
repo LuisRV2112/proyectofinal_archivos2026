@@ -1,16 +1,6 @@
-/**
- * Generadores del texto de los documentos de la carga inicial.
- *
- * Cada documento de datos.js llama a una de estas plantillas con sus propios
- * datos, de modo que los 50 archivos tienen contenido distinto y verosimil
- * (contratos, actas, facturas, politicas...) en vez de "lorem ipsum".
- *
- * El texto lleva tildes y enes a proposito: en UTF-8 ocupan 2 bytes, asi que
- * el numero de bytes no coincide con el de caracteres. Sirve para comprobar
- * que `tamano` guarda bytes reales (lo que mide GridFS) y no caracteres.
- *
- * La organizacion y todas las personas y empresas son ficticias.
- */
+// Plantillas de texto para los archivos del seed. Datos ficticios.
+// Las tildes y enes ocupan 2 bytes en UTF-8: sirven para comprobar que
+// tamano guarda bytes y no caracteres.
 
 export const EMPRESA = 'Nexo Consultores, S.A.';
 const NIT_EMPRESA = '9876543-2';
@@ -26,9 +16,7 @@ export const quetzales = (monto) => `Q ${formatoMoneda.format(monto)}`;
 const lista = (elementos, marca = '-') => elementos.map((e) => `${marca} ${e}`).join('\n');
 const numerada = (elementos) => elementos.map((e, i) => `${i + 1}. ${e}`).join('\n');
 
-// ---------------------------------------------------------------------------
 // Contratos
-// ---------------------------------------------------------------------------
 
 const ORDINALES = ['PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA', 'QUINTA', 'SEXTA', 'SÉPTIMA', 'OCTAVA', 'NOVENA', 'DÉCIMA'];
 
@@ -102,9 +90,7 @@ Por ${EMPRESA}               Por ${proveedor}
 `;
 }
 
-// ---------------------------------------------------------------------------
 // Actas y minutas
-// ---------------------------------------------------------------------------
 
 export function acta({ titulo, numero, fecha, hora, lugar, asistentes, agenda, desarrollo, acuerdos, proximaReunion }) {
   return `# ${titulo}
@@ -154,9 +140,7 @@ ${siguientePaso}
 `;
 }
 
-// ---------------------------------------------------------------------------
 // Facturacion
-// ---------------------------------------------------------------------------
 
 export function factura({ tipo = 'FACTURA', serie, numero, fecha, cliente, nitCliente, direccion, lineas, referencia, observaciones }) {
   const filas = lineas.map(([descripcion, cantidad, precio]) => ({
@@ -166,7 +150,7 @@ export function factura({ tipo = 'FACTURA', serie, numero, fecha, cliente, nitCl
     total: cantidad * precio,
   }));
   const total = filas.reduce((suma, f) => suma + f.total, 0);
-  // Los precios incluyen IVA (asi se emite en Guatemala): se desglosa la base.
+  // Los precios ya incluyen IVA.
   const base = total / (1 + TASA_IVA);
   const iva = total - base;
   const ancho = 44;
@@ -198,9 +182,7 @@ Sujeto a pagos trimestrales ISR.
 `;
 }
 
-// ---------------------------------------------------------------------------
 // Politicas y procedimientos
-// ---------------------------------------------------------------------------
 
 export function politica({ titulo, codigo, version, vigencia, aprobadoPor, objetivo, alcance, secciones, responsables }) {
   return `# ${titulo}
@@ -243,9 +225,7 @@ ${lista(notas)}
 `;
 }
 
-// ---------------------------------------------------------------------------
 // Presupuestos e informes
-// ---------------------------------------------------------------------------
 
 export function presupuestoTexto({ titulo, area, periodo, responsable, partidas, comentario }) {
   const total = partidas.reduce((suma, [, monto]) => suma + monto, 0);
@@ -293,9 +273,7 @@ ${numerada(conclusiones)}
 `;
 }
 
-// ---------------------------------------------------------------------------
 // Notas sueltas
-// ---------------------------------------------------------------------------
 
 export function notas({ titulo, fecha, bloques }) {
   return `${titulo}

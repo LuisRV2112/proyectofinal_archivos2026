@@ -4,11 +4,7 @@ import { Observable } from 'rxjs';
 import { URL_API } from '../nucleo/configuracion';
 import { CompartidoConmigo, CompartidoPorMi, Nivel, PermisoDetallado, RecursoCompartible, UsuarioResumen } from '../nucleo/modelos';
 
-/**
- * Llamadas de comparticion. La misma API sirve para carpetas y archivos
- * (/api/recursos/:tipo/...) porque ambos EMBEBEN `compartidoCon` con el mismo
- * esquema.
- */
+// Mismas rutas para carpetas y archivos: ambos embeben compartidoCon.
 @Injectable({ providedIn: 'root' })
 export class Comparticion {
   private readonly http = inject(HttpClient);

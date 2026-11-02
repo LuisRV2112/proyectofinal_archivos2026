@@ -10,12 +10,7 @@ import { Usuario } from '../../nucleo/modelos';
 import { CambiosUsuario, NuevoUsuario, UsuariosApi } from '../../servicios/usuarios';
 import { DialogoUsuario } from './dialogo-usuario';
 
-/**
- * Gestion de usuarios (solo administrador): listar, crear, editar y
- * activar/desactivar. No hay "eliminar usuario": desactivar impide iniciar
- * sesion pero conserva sus documentos y su historial, que son auditoria y
- * siguen contando en los reportes.
- */
+// No se eliminan usuarios: desactivar conserva sus documentos e historial.
 @Component({
   selector: 'app-usuarios',
   imports: [FormsModule, DatePipe, BytesPipe, Confirmacion, DialogoUsuario],
@@ -39,11 +34,10 @@ export class UsuariosPagina implements OnInit {
   readonly cargando = signal(true);
   readonly error = signal<string | null>(null);
 
-  // Filtros (la API los aplica: ?rol= y ?activo=).
   readonly rol = signal('');
   readonly activo = signal('');
 
-  /** null = cerrado; 'nuevo' = crear; un usuario = editarlo. */
+  // null = cerrado, 'nuevo' = crear
   readonly editando = signal<Usuario | 'nuevo' | null>(null);
   readonly aDesactivar = signal<Usuario | null>(null);
   readonly ocupado = signal(false);
@@ -84,7 +78,7 @@ export class UsuariosPagina implements OnInit {
       return;
     }
     this.ejecutar(this.api.actualizar(usuario._id, cambios), (u) => {
-      // Si el admin se edito a si mismo, el nombre del menu se actualiza.
+      // Si se edito a si mismo, actualiza el menu.
       if (u._id === this.idPropio()) this.autenticacion.refrescarPerfil();
       return `Usuario "${u.username}" actualizado`;
     });
@@ -100,7 +94,6 @@ export class UsuariosPagina implements OnInit {
         this.avisos.exito(mensaje(u));
         this.cargar();
       },
-      // Username o correo repetidos (409), validaciones del esquema (400)...
       error: (e) => {
         this.ocupado.set(false);
         this.errorDialogo.set(mensajeDeError(e));
@@ -108,7 +101,7 @@ export class UsuariosPagina implements OnInit {
     });
   }
 
-  /** Desactivar pide confirmacion; activar no (no tiene consecuencias que avisar). */
+  // Solo desactivar pide confirmacion.
   cambiarEstado(usuario: Usuario) {
     if (usuario.activo) {
       this.errorDialogo.set(null);

@@ -4,7 +4,7 @@ import { TablaArchivosMasOperaciones, TablaArchivosPorFecha, TablaArchivosPorTip
 import { TablaCompartidosPor, TablaNuncaCompartidos, TablaRecibidos, TablaRecursosMasCompartidos } from './tablas-comparticion';
 import { TablaTopUsuariosArchivos, TablaUsuariosMasCompartidos } from './tablas-usuarios';
 
-/** Filtros que puede llevar un reporte; cada uno es un parametro de la API. */
+// Cada filtro es un parametro de la API.
 export type Filtro =
   | 'rango' // desde, hasta
   | 'extension'
@@ -24,31 +24,19 @@ export interface DefinicionReporte {
   grupo: string;
   titulo: string;
   descripcion: string;
-  /** Ruta bajo /api/reportes. */
+  // Bajo /api/reportes
   ruta: string;
-  /** Seccion 6: archivos, usuarios y actividad global son solo del administrador. */
   soloAdmin: boolean;
   filtros: Filtro[];
-  /** El backend exige desde y/o hasta (reportes 2 y 9). */
   rangoObligatorio?: boolean;
-  /** Respuesta {total, pagina, limite, resultados}: la pagina la controla la vista. */
   paginado?: boolean;
-  /**
-   * Que significa no elegir usuario (solo administrador): "yo" en los
-   * reportes de un usuario concreto (7 a 9), "todos" en los que por defecto
-   * abarcan el sistema entero (13 y 14).
-   */
+  // Que pasa si el administrador no elige usuario.
   sinUsuario?: 'yo' | 'todos';
-  /** Valor por defecto del filtro "limite". */
   limite?: number;
   tabla: Type<unknown>;
 }
 
-/**
- * Los 12 reportes de la seccion 7 mas el 13 y el 14, que pide la hoja de
- * calificacion. Las pantallas se arman desde esta lista:
- * agregar un reporte es agregar una entrada y su tabla, sin tocar la vista.
- */
+// Para agregar un reporte basta con una entrada aqui y su tabla.
 export const REPORTES: DefinicionReporte[] = [
   {
     clave: 'archivos-por-tipo',

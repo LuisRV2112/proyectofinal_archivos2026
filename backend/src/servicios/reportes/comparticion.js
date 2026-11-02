@@ -6,18 +6,9 @@ import { COLACION_NOMBRES } from '../arbol.js';
 import { etapasPropietario } from './archivos.js';
 import { leerUsuarioObjetivo } from './comun.js';
 
-/**
- * Reportes de COMPARTICION (6 a 8, y 13).
- *
- * Permisos (seccion 6): el administrador ve los de todos; un usuario solo los
- * PROPIOS (lo que el comparte y lo que el recibe).
- *
- * Los tres cubren carpetas Y archivos con $unionWith: el pipeline arranca en
- * `carpetas` y $unionWith agrega al mismo flujo los documentos de `archivos`
- * (procesados por su propio sub-pipeline), como un UNION ALL de SQL. Las
- * etapas siguientes los tratan igual porque ambos embeben `compartidoCon` con
- * el mismo esquema.
- */
+// Reportes de comparticion (6, 7, 8 y 13). El usuario solo ve los suyos.
+// Empiezan en carpetas y $unionWith agrega los archivos; ambos tienen el
+// mismo compartidoCon.
 
 const USUARIOS = Usuario.collection.name;
 const CARPETAS = Carpeta.collection.name;
@@ -26,7 +17,6 @@ const TIPOS = ['CARPETA', 'ARCHIVO'];
 
 const PROHIBIDO = 'Solo puedes consultar tus propios reportes de compartición';
 
-/** ?tipo=CARPETA|ARCHIVO para limitar a una de las dos colecciones. */
 function leerTipo(valor) {
   if (valor === undefined) return null;
   const tipo = String(valor).toUpperCase();
@@ -34,10 +24,7 @@ function leerTipo(valor) {
   return tipo;
 }
 
-/**
- * Etapas por coleccion: filtra, marca el tipo y calcula la ubicacion legible
- * (en una carpeta es su `ruta`; en un archivo, la ruta de su carpeta).
- */
+// Filtra, marca el tipo y calcula la ubicacion.
 function etapasRecurso(tipo, filtro) {
   const ubicacion =
     tipo === 'CARPETA'
@@ -54,11 +41,7 @@ function etapasRecurso(tipo, filtro) {
   ];
 }
 
-/**
- * Inicio comun: recursos de ambas colecciones que cumplen `filtro`. Si se
- * pidio un solo tipo, la otra coleccion se descarta con un $match imposible
- * en vez de cambiar la forma del pipeline.
- */
+// Si se pidio un solo tipo, la otra coleccion recibe un $match que no coincide.
 function etapasUnion(filtro, tipo) {
   const filtroCarpetas = tipo === 'ARCHIVO' ? { _id: null } : filtro;
   const filtroArchivos = tipo === 'CARPETA' ? { _id: null } : filtro;
@@ -68,7 +51,7 @@ function etapasUnion(filtro, tipo) {
   ];
 }
 
-/** Reemplaza cada `compartidoCon.usuarioId` por {username, nombreCompleto}. */
+// usuarioId de cada permiso -> { username, nombreCompleto }
 function etapasDestinatarios() {
   return [
     {
@@ -80,7 +63,6 @@ function etapasDestinatarios() {
         as: 'usuariosDestino',
       },
     },
-    // Cruza cada permiso con su usuario (el $lookup los trae sin orden).
     {
       $set: {
         compartidoCon: {
@@ -102,42 +84,33 @@ function etapasDestinatarios() {
   ];
 }
 
-/**
- * Reporte 6 — Archivos (y carpetas) compartidos con mayor cantidad de usuarios.
- * GET /api/reportes/comparticion/mas-compartidos[?tipo=ARCHIVO&limite=10]
- */
+// Reporte 6: recursos compartidos con mas usuarios.
 export async function recursosConMasUsuarios(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, ['tipo', 'limite']);
   const tipo = leerTipo(consulta.tipo);
   const limite = leerEntero(consulta.limite, 'limite', { minimo: 1, maximo: 100, defecto: 10 });
-  // Un usuario normal solo ve el ranking de SUS recursos.
   const filtro = {
     'compartidoCon.0': { $exists: true },
     ...(usuario.rol !== 'ADMINISTRADOR' && { propietarioId: usuario._id }),
   };
 
   return Carpeta.aggregate([
-    // 1. Carpetas + archivos activos con al menos un permiso.
+    // 1. Carpetas y archivos compartidos.
     ...etapasUnion(filtro, tipo),
-    // 2. Con cuantos usuarios esta compartido cada uno: el largo del array
-    //    embebido, sin consultar ninguna otra coleccion.
+    // 2. Tamano del array embebido, sin otra consulta.
     { $set: { usuarios: { $size: '$compartidoCon' } } },
-    // 3. Los mas compartidos primero; desempate alfabetico.
+    // 3. Top N.
     { $sort: { usuarios: -1, nombre: 1 } },
     { $limit: limite },
-    // 4. Nombres del propietario y de cada destinatario.
+    // 4. Nombres de propietario y destinatarios.
     ...etapasPropietario(),
     ...etapasDestinatarios(),
     { $project: { propietarioId: 0 } },
-    // Colacion en espanol: el desempate por nombre ignora mayusculas, igual
-    // que los listados ("Manuales" no va antes que "directorio" por la M).
+    // Para ordenar por nombre sin importar mayusculas.
   ]).collation(COLACION_NOMBRES);
 }
 
-/**
- * Reporte 7 — Recursos compartidos POR un usuario seleccionado.
- * GET /api/reportes/comparticion/compartidos-por?usuarioId=...[&tipo=&pagina=&limite=]
- */
+// Reporte 7: recursos compartidos por un usuario.
 export async function compartidosPorUsuario(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, ['usuarioId', 'tipo', 'pagina', 'limite']);
   const objetivo = await leerUsuarioObjetivo(consulta, usuario, PROHIBIDO);
@@ -145,28 +118,21 @@ export async function compartidosPorUsuario(consulta, usuario) {
   const paginacion = leerPaginacion(consulta);
 
   const resultado = await Carpeta.aggregate([
-    // 1. Recursos activos del usuario con al menos un permiso
-    //    (indice {propietarioId: 1, ...} de cada coleccion).
+    // 1. Recursos del usuario con algun permiso.
     ...etapasUnion({ propietarioId: objetivo._id, 'compartidoCon.0': { $exists: true } }, tipo),
-    // 2. Cuantas personas y por que nivel, para leer el reporte de un vistazo.
+    // 2. Cantidad de usuarios.
     { $set: { usuarios: { $size: '$compartidoCon' } } },
-    // 3. Los mas compartidos primero.
+    // 3. Ordenar.
     { $sort: { usuarios: -1, nombre: 1 } },
-    // 4. Pagina; los nombres de los destinatarios solo para las filas devueltas.
+    // 4. Paginar y luego traer los destinatarios.
     ...etapasPaginacion(paginacion, [...etapasDestinatarios(), { $project: { propietarioId: 0 } }]),
   ]).collation(COLACION_NOMBRES);
 
   return { usuario: objetivo, ...respuestaPaginada(resultado, paginacion) };
 }
 
-/**
- * Reporte 8 — Recursos RECIBIDOS por un usuario seleccionado.
- * GET /api/reportes/comparticion/recibidos?usuarioId=...[&tipo=&pagina=&limite=]
- *
- * Son las comparticiones DIRECTAS. El acceso heredado (lo que hay dentro de
- * una carpeta recibida) no se lista recurso por recurso: se deduce de la
- * carpeta, igual que en la regla de permisos.
- */
+// Reporte 8: recursos recibidos por un usuario. Solo los directos; lo
+// heredado se deduce de la carpeta.
 export async function recibidosPorUsuario(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, ['usuarioId', 'tipo', 'pagina', 'limite']);
   const objetivo = await leerUsuarioObjetivo(consulta, usuario, PROHIBIDO);
@@ -174,19 +140,18 @@ export async function recibidosPorUsuario(consulta, usuario) {
   const paginacion = leerPaginacion(consulta);
 
   const resultado = await Carpeta.aggregate([
-    // 1. Recursos activos donde el usuario aparece en compartidoCon (indice
-    //    multiclave {"compartidoCon.usuarioId": 1} en ambas colecciones).
+    // 1. Donde aparece en compartidoCon (indice multiclave).
     ...etapasUnion({ 'compartidoCon.usuarioId': objetivo._id }, tipo),
-    // 2. De todo el array, solo SU permiso: nivel y fecha en que lo recibio.
+    // 2. Solo su permiso.
     {
       $set: {
         permiso: { $first: { $filter: { input: '$compartidoCon', cond: { $eq: ['$$this.usuarioId', objetivo._id] } } } },
       },
     },
     { $set: { nivel: '$permiso.nivel', recibidoEn: '$permiso.otorgadoEn', otorgadoPor: '$permiso.otorgadoPor' } },
-    // 3. Lo recibido mas recientemente primero.
+    // 3. Mas recientes primero.
     { $sort: { recibidoEn: -1 } },
-    // 4. Pagina, con el propietario y quien lo otorgo (puede ser un admin).
+    // 4. Paginar con propietario y quien lo otorgo.
     ...etapasPaginacion(paginacion, [
       ...etapasPropietario(),
       ...etapasPropietario('otorgadoPor', 'otorgadoPor'),
@@ -197,26 +162,13 @@ export async function recibidosPorUsuario(consulta, usuario) {
   return { usuario: objetivo, ...respuestaPaginada(resultado, paginacion) };
 }
 
-/**
- * Reporte 13 — Archivos que nunca han sido compartidos.
- * GET /api/reportes/comparticion/nunca-compartidos[?usuarioId=&extension=&pagina=&limite=]
- *
- * "Nunca" se responde con el HISTORIAL, no con el estado actual: un archivo
- * que se compartio y luego se revoco tiene `compartidoCon` vacio, pero SI fue
- * compartido. Y por la herencia de permisos (regla 5.2), compartir una
- * carpeta comparte todo lo que contiene: tambien cuenta si se compartio
- * alguna de sus carpetas ancestro. Gracias a `ancestros`, las dos cosas se
- * resuelven con UN $lookup: ¿hay alguna entrada COMPARTIR cuyo recursoId sea
- * el archivo o cualquiera de sus ancestros?
- *
- * Administrador: todos (o los de ?usuarioId). Usuario: solo los suyos.
- */
+// Reporte 13: archivos nunca compartidos.
+// Se revisa el historial y no compartidoCon, porque un permiso revocado
+// tambien cuenta. Tambien cuenta si se compartio una carpeta ancestro.
 export async function archivosNuncaCompartidos(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, ['usuarioId', 'extension', 'pagina', 'limite']);
   const paginacion = leerPaginacion(consulta, { defecto: 20, maximo: 100 });
   const filtro = { 'eliminado.estado': false };
-  // Sin ?usuarioId, el administrador ve los de todos; un usuario, los suyos.
-  // leerUsuarioObjetivo da 403 si un usuario pide los de otro.
   if (usuario.rol !== 'ADMINISTRADOR' || consulta.usuarioId !== undefined) {
     filtro.propietarioId = (await leerUsuarioObjetivo(consulta, usuario, PROHIBIDO))._id;
   }
@@ -229,11 +181,9 @@ export async function archivosNuncaCompartidos(consulta, usuario) {
   }
 
   const [resultado] = await Archivo.aggregate([
-    // 1. Archivos activos (con los filtros). Un archivo con permisos vigentes
-    //    ya fue compartido: se descarta aqui sin consultar el historial.
+    // 1. Sin permisos vigentes.
     { $match: { ...filtro, 'compartidoCon.0': { $exists: false } } },
-    // 2. ¿Alguna vez se compartio el archivo o una carpeta que lo contiene?
-    //    El $match usa el indice {accion: 1} y con una coincidencia basta.
+    // 2. Buscar un COMPARTIR del archivo o de sus ancestros; basta uno.
     {
       $lookup: {
         from: Actividad.collection.name,
@@ -246,11 +196,11 @@ export async function archivosNuncaCompartidos(consulta, usuario) {
         as: 'comparticiones',
       },
     },
-    // 3. Solo los que no tienen ninguna.
+    // 3. Los que no tienen ninguno.
     { $match: { comparticiones: { $size: 0 } } },
-    // 4. Los mas antiguos primero: llevan mas tiempo sin compartirse.
+    // 4. Mas antiguos primero.
     { $sort: { creadoEn: 1, _id: 1 } },
-    // 5. Pagina, y solo para esas filas: ruta de la carpeta y propietario.
+    // 5. Paginar con ruta y propietario.
     ...etapasPaginacion(paginacion, [
       { $lookup: { from: CARPETAS, localField: 'carpetaId', foreignField: '_id', pipeline: [{ $project: { ruta: 1 } }], as: 'carpeta' } },
       ...etapasPropietario(),

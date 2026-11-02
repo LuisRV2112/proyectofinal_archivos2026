@@ -5,15 +5,8 @@ import { mensajeDeError } from '../nucleo/errores';
 import { Archivo } from '../nucleo/modelos';
 import { Documentos } from '../servicios/documentos';
 
-/**
- * Vista previa de un .txt o .md dentro de la aplicacion. El contenido sale de
- * GridFS a traves de GET /api/archivos/:id/contenido; los metadatos ya
- * estaban en el listado (por eso se separan: listar no lee el contenido).
- *
- * Un .md se muestra formateado. El HTML que genera `marked` pasa por
- * [innerHTML], que Angular SANITIZA: un <script> o un onclick escrito dentro
- * del markdown se descarta y no se ejecuta.
- */
+// El contenido se pide aparte porque el listado solo trae metadatos.
+// El HTML de marked va por [innerHTML], que Angular sanitiza (quita scripts).
 @Component({
   selector: 'app-vista-previa',
   imports: [BytesPipe],

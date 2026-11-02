@@ -3,11 +3,7 @@ import { RouterLink } from '@angular/router';
 import { Autenticacion } from '../../nucleo/autenticacion';
 import { DefinicionReporte, REPORTES } from './catalogo';
 
-/**
- * Indice de reportes, agrupados como en la seccion 7. Cada uno abre su
- * propia vista (/reportes/:clave). Al usuario normal solo se le ofrecen los
- * que puede pedir: la comparticion propia y su historial.
- */
+// El usuario normal solo ve los reportes de comparticion y su historial.
 @Component({
   selector: 'app-reportes-indice',
   imports: [RouterLink],

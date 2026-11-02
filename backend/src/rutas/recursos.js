@@ -2,11 +2,7 @@ import { Router } from 'express';
 import { autenticar } from '../middleware/autenticacion.js';
 import { cambiarNivel, compartir, listarPermisos, revocar } from '../servicios/comparticion.js';
 
-/**
- * Permisos de un recurso. `:tipo` es "archivos" o "carpetas": la misma logica
- * sirve para ambos porque los dos embeben `compartidoCon` con el mismo
- * esquema.
- */
+// :tipo es archivos o carpetas; ambos usan el mismo compartidoCon.
 const router = Router();
 
 router.use(autenticar);

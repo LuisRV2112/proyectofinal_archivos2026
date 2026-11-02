@@ -5,16 +5,11 @@ import { ErrorNoAutenticado, ErrorProhibido } from '../utilidades/errores.js';
 import { exigirTexto } from '../utilidades/validacion.js';
 import { registrarActividad } from './actividad.js';
 
-/**
- * Hash con el que se compara cuando el username no existe. Comparar igual
- * (aunque se sepa que fallara) hace que la respuesta tarde lo mismo exista o
- * no el usuario; si no, midiendo el tiempo se podria averiguar que usernames
- * son validos. Se calcula una sola vez al cargar el modulo.
- */
+// Se compara contra este hash si el username no existe, para que la
+// respuesta tarde lo mismo y no se pueda saber que usuarios existen.
 const HASH_DE_RELLENO = bcrypt.hashSync('relleno-para-igualar-tiempos', 10);
 
-// El mismo mensaje para "no existe" y "contrasena incorrecta", por la misma
-// razon: no revelar que usernames existen.
+// Mismo mensaje en ambos casos, por la misma razon.
 const MENSAJE_CREDENCIALES = 'Usuario o contraseña incorrectos';
 
 function configuracionJwt() {
@@ -23,7 +18,6 @@ function configuracionJwt() {
   return { secreto, expiracion: process.env.JWT_EXPIRACION || '8h' };
 }
 
-/** Lo que la API devuelve de un usuario autenticado. */
 function perfil(usuario) {
   return {
     id: usuario._id,
@@ -34,18 +28,12 @@ function perfil(usuario) {
   };
 }
 
-/**
- * Verifica las credenciales y emite un JWT.
- *
- * El token solo lleva el id (`sub`) y el rol: es firmado pero no cifrado, asi
- * que cualquiera puede leer su contenido; no debe llevar datos sensibles.
- */
+// El JWT va firmado pero no cifrado: solo lleva el id y el rol.
 export async function iniciarSesion(cuerpo) {
   const username = exigirTexto(cuerpo?.username, 'username').toLowerCase();
   const password = exigirTexto(cuerpo?.password, 'password');
 
-  // passwordHash tiene select:false en el esquema; el login es el unico
-  // lugar que lo pide explicitamente.
+  // Unico lugar que pide passwordHash.
   const usuario = await Usuario.findOne({ username }).select('+passwordHash');
   const coincide = await bcrypt.compare(password, usuario?.passwordHash ?? HASH_DE_RELLENO);
 
@@ -61,8 +49,7 @@ export async function iniciarSesion(cuerpo) {
     throw new ErrorNoAutenticado(MENSAJE_CREDENCIALES);
   }
 
-  // Se comprueba DESPUES de la contrasena: a quien no la conoce no se le dice
-  // que la cuenta existe y esta desactivada.
+  // Despues de la contrasena, para no revelar la cuenta a quien no la sabe.
   if (!usuario.activo) {
     await registrarActividad({
       usuarioId: usuario._id,
@@ -90,16 +77,8 @@ export async function iniciarSesion(cuerpo) {
   return { token, expiraEn: expiracion, ...perfil(usuario) };
 }
 
-/**
- * Valida el token y devuelve el usuario ACTUAL desde la base.
- *
- * Se consulta la base en cada peticion en vez de confiar solo en el token
- * (que seria lo "sin estado" puro) porque un JWT no se puede revocar: si el
- * administrador desactiva a alguien o le cambia el rol, el token ya emitido
- * seguiria valiendo hasta expirar. Es una busqueda por _id, la mas barata
- * posible, y a cambio la desactivacion y los cambios de rol tienen efecto
- * inmediato.
- */
+// Se busca el usuario en cada peticion porque un JWT no se puede revocar:
+// asi desactivar o cambiar el rol tiene efecto inmediato. Es una busqueda por _id.
 export async function usuarioDesdeToken(token) {
   const { secreto } = configuracionJwt();
   let datos;

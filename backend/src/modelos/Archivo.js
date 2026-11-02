@@ -3,7 +3,6 @@ import { esquemaPermiso, campoEliminado, marcasDeTiempo, limpiarJSON } from './e
 
 const { Schema } = mongoose;
 
-// El enunciado limita los tipos a texto plano y Markdown.
 export const EXTENSIONES_PERMITIDAS = ['txt', 'md'];
 
 export const MIME_POR_EXTENSION = {
@@ -11,13 +10,9 @@ export const MIME_POR_EXTENSION = {
   md: 'text/markdown',
 };
 
-/**
- * Metadatos de un archivo. El CONTENIDO no esta aqui sino en GridFS
- * (`gridfsId`): ver src/config/gridfs.js para el porque.
- */
+// Solo metadatos; el contenido esta en GridFS (ver config/gridfs.js).
 const esquemaArchivo = new Schema(
   {
-    // Nombre completo con extension: "contrato-2026.md".
     nombre: {
       type: String,
       required: [true, 'El nombre del archivo es obligatorio'],
@@ -25,8 +20,7 @@ const esquemaArchivo = new Schema(
       maxlength: [150, 'El nombre del archivo no puede superar 150 caracteres'],
       match: [/^[^/\\]+$/, 'El nombre del archivo no puede contener / ni \\'],
     },
-    // Se guarda aparte del nombre para agrupar y filtrar por tipo (reportes)
-    // con un indice, sin tener que analizar el texto del nombre.
+    // Separada del nombre para agrupar por tipo con indice.
     extension: {
       type: String,
       required: true,
@@ -34,26 +28,21 @@ const esquemaArchivo = new Schema(
       enum: { values: EXTENSIONES_PERMITIDAS, message: 'Solo se permiten archivos .txt y .md' },
     },
     mimeType: { type: String, required: true },
-    // Bytes. Coincide con `length` del documento en contenido.files.
+    // Bytes, igual a length en contenido.files
     tamano: { type: Number, required: true, min: 0 },
-    // Referencia: ver el comentario equivalente en Carpeta.
     propietarioId: { type: Schema.Types.ObjectId, ref: 'Usuario', required: true },
-    // Carpeta directa; null = raiz del usuario.
+    // null = raiz
     carpetaId: { type: Schema.Types.ObjectId, ref: 'Carpeta', default: null },
-    // Todas las carpetas que lo contienen, de la raiz a la directa INCLUIDA
-    // (es decir, carpeta.ancestros + [carpetaId]). Asi {ancestros: X} trae los
-    // archivos de todo el subarbol de X en una consulta, y la herencia de
-    // permisos es comprobar si alguna carpeta compartida con el usuario esta
-    // en este array.
+    // carpeta.ancestros + carpetaId. Sirve para buscar en un subarbol y para
+    // saber si hereda permisos de alguna carpeta compartida.
     ancestros: { type: [{ type: Schema.Types.ObjectId, ref: 'Carpeta' }], default: [] },
-    // Referencia al documento de contenido.files. Va por separado y no
-    // embebido porque el contenido solo se lee al descargar.
+    // Referencia a contenido.files: el contenido solo se lee al descargar.
     gridfsId: { type: Schema.Types.ObjectId, required: true },
     etiquetas: {
       type: [{ type: String, trim: true, lowercase: true, maxlength: 40 }],
       default: [],
     },
-    // EMBEBIDOS: ver esquemasComunes.js.
+    // Embebidos, ver esquemasComunes.js
     compartidoCon: { type: [esquemaPermiso], default: [] },
     eliminado: campoEliminado,
   },
@@ -63,33 +52,30 @@ const esquemaArchivo = new Schema(
   }
 );
 
-// La extension debe ser la del nombre: si no, un "informe.pdf" podria
-// guardarse declarando extension "txt" y saltarse la restriccion de tipos.
+// Evita guardar "informe.pdf" con extension "txt".
 esquemaArchivo.pre('validate', function () {
   if (this.nombre && this.extension && !this.nombre.toLowerCase().endsWith(`.${this.extension}`)) {
     this.invalidate('nombre', `El nombre debe terminar en .${this.extension}`);
   }
 });
 
-// --- Indices (tabla 4.4 del modelo) ---
+// Indices
 
-// Listar los archivos de una carpeta de un usuario.
+// Archivos de una carpeta.
 esquemaArchivo.index({ propietarioId: 1, carpetaId: 1 });
-// Busqueda dentro de un subarbol (multiclave).
+// Busqueda en un subarbol (multiclave).
 esquemaArchivo.index({ ancestros: 1 });
-// "Compartido conmigo".
+// Compartido conmigo.
 esquemaArchivo.index({ 'compartidoCon.usuarioId': 1 });
-// Papelera y exclusion en listados.
+// Papelera.
 esquemaArchivo.index({ 'eliminado.estado': 1 });
-// Busqueda por texto en nombre y etiquetas. Una coleccion admite un solo
-// indice de texto, por eso ambos campos van en el mismo. Idioma espanol para
-// que la busqueda ignore palabras vacias ("de", "la") y use raices
-// ("contratos" encuentra "contrato").
+// Solo se permite un indice de texto por coleccion, por eso van juntos.
+// En espanol para que "contratos" encuentre "contrato".
 esquemaArchivo.index(
   { nombre: 'text', etiquetas: 'text' },
   { name: 'busqueda_texto', default_language: 'spanish' }
 );
-// Reportes: agrupacion por tipo y por fecha de subida.
+// Reportes.
 esquemaArchivo.index({ extension: 1 });
 esquemaArchivo.index({ creadoEn: -1 });
 

@@ -10,23 +10,13 @@ import {
 } from '../../utilidades/consultas.js';
 import { exigirObjectId, rechazarCamposDesconocidos } from '../../utilidades/validacion.js';
 
-/**
- * Reportes de ARCHIVOS Y ALMACENAMIENTO (1 a 3, y 14). Solo administrador.
- *
- * Todos se resuelven con aggregation pipeline: el agrupamiento, los conteos
- * y los cruces con otras colecciones ($lookup) los hace MongoDB, y a Node
- * solo llega el resultado ya resumido.
- *
- * Por defecto cuentan tambien lo que esta en la papelera: esos archivos
- * siguen almacenados y ocupando espacio (regla 5.4). Con
- * ?incluirPapelera=false se limitan a los activos.
- */
+// Reportes de archivos (1, 2, 3 y 14). Solo administrador.
+// Incluyen la papelera porque sigue ocupando espacio; ?incluirPapelera=false la excluye.
 
 const USUARIOS = Usuario.collection.name;
 const CARPETAS = Carpeta.collection.name;
 const ARCHIVOS = Archivo.collection.name;
 
-/** $match inicial segun ?incluirPapelera (true por defecto). */
 function filtroPapelera(consulta) {
   return leerBooleano(consulta.incluirPapelera, 'incluirPapelera', true) ? {} : { 'eliminado.estado': false };
 }
@@ -40,11 +30,7 @@ function leerExtension(valor) {
   return extension;
 }
 
-/**
- * Etapas que reemplazan propietarioId por {_id, username, nombreCompleto}.
- * $lookup es el "join" de MongoDB: busca en `usuarios` el documento cuyo _id
- * coincide (indice _id) y lo deja en un array, que $unwind aplana.
- */
+// propietarioId -> { username, nombreCompleto } con $lookup + $unwind.
 export function etapasPropietario(campo = 'propietarioId', destino = 'propietario') {
   return [
     {
@@ -52,27 +38,22 @@ export function etapasPropietario(campo = 'propietarioId', destino = 'propietari
         from: USUARIOS,
         localField: campo,
         foreignField: '_id',
-        // Solo lo necesario: nunca viaja el passwordHash.
         pipeline: [{ $project: { username: 1, nombreCompleto: 1 } }],
         as: destino,
       },
     },
-    // preserveNull: si el usuario no existiera, la fila se conserva con null.
     { $unwind: { path: `$${destino}`, preserveNullAndEmptyArrays: true } },
   ];
 }
 
-/**
- * Reporte 1 — Cantidad de archivos agrupados por tipo.
- * GET /api/reportes/archivos/por-tipo[?incluirPapelera=false]
- */
+// Reporte 1: archivos por tipo.
 export async function archivosPorTipo(consulta) {
   rechazarCamposDesconocidos(consulta, ['incluirPapelera']);
 
   const filas = await Archivo.aggregate([
-    // 1. Que archivos entran (todos, o solo los activos).
+    // 1. Con o sin papelera.
     { $match: filtroPapelera(consulta) },
-    // 2. Un grupo por extension: cuantos hay, cuantos en papelera, bytes.
+    // 2. Agrupar por extension.
     {
       $group: {
         _id: '$extension',
@@ -82,15 +63,14 @@ export async function archivosPorTipo(consulta) {
         tamanoPromedio: { $avg: '$tamano' },
       },
     },
-    // 3. Total general en cada fila, sin otra consulta: una "ventana" que
-    //    abarca todas las filas suma las cantidades de todos los grupos.
+    // 3. Total general en cada fila con una ventana sobre todos los grupos.
     {
       $setWindowFields: {
         sortBy: { cantidad: -1 },
         output: { total: { $sum: '$cantidad', window: { documents: ['unbounded', 'unbounded'] } } },
       },
     },
-    // 4. Forma final, con el porcentaje de cada tipo sobre el total.
+    // 4. Porcentaje de cada tipo.
     {
       $project: {
         _id: 0,
@@ -104,18 +84,14 @@ export async function archivosPorTipo(consulta) {
         total: 1,
       },
     },
-    // 5. Primero el tipo mas frecuente.
+    // 5. Ordenar.
     { $sort: { cantidad: -1 } },
   ]);
 
   return { total: filas[0]?.total ?? 0, tipos: filas.map(({ total, ...fila }) => fila) };
 }
 
-/**
- * Reporte 2 — Archivos almacenados dentro de un rango de fechas.
- * GET /api/reportes/archivos/por-fecha?desde=2026-05-01&hasta=2026-05-31
- *     [&extension=md&incluirPapelera=false&pagina=1&limite=50]
- */
+// Reporte 2: archivos en un rango de fechas.
 export async function archivosPorFecha(consulta) {
   rechazarCamposDesconocidos(consulta, ['desde', 'hasta', 'extension', 'incluirPapelera', 'pagina', 'limite']);
   const rango = leerRangoFechas(consulta, { obligatorio: true });
@@ -123,16 +99,14 @@ export async function archivosPorFecha(consulta) {
   const paginacion = leerPaginacion(consulta);
 
   const resultado = await Archivo.aggregate([
-    // 1. Rango sobre la fecha de subida (indice {creadoEn: -1}) y filtros.
+    // 1. Rango de creadoEn (indice) y filtros.
     { $match: { creadoEn: rango, ...(extension && { extension }), ...filtroPapelera(consulta) } },
-    // 2. Del mas reciente al mas antiguo (el mismo indice sirve para ordenar).
+    // 2. Mas recientes primero.
     { $sort: { creadoEn: -1 } },
-    // 3. Total y pagina en una sola pasada. Los $lookup van dentro, sobre la
-    //    pagina ya cortada.
+    // 3. Paginar; los $lookup solo sobre la pagina.
     ...etapasPaginacion(paginacion, [
-      // 3a. Propietario: username y nombre en vez de un ObjectId.
       ...etapasPropietario(),
-      // 3b. Ruta legible de la carpeta en que esta.
+      // Ruta de la carpeta.
       {
         $lookup: {
           from: CARPETAS,
@@ -142,7 +116,6 @@ export async function archivosPorFecha(consulta) {
           as: 'carpeta',
         },
       },
-      // 3c. Forma de cada fila.
       {
         $project: {
           nombre: 1,
@@ -160,35 +133,27 @@ export async function archivosPorFecha(consulta) {
   return { desde: rango.$gte ?? null, hasta: rango.$lte ?? null, ...respuestaPaginada(resultado, paginacion) };
 }
 
-/**
- * Reporte 3 — Archivos con mayor cantidad de operaciones registradas.
- * GET /api/reportes/archivos/mas-operaciones[?limite=10&desde=&hasta=]
- *
- * Se parte de `actividad` y no de `archivos` (con un $lookup a actividad por
- * cada archivo): agrupar el historial por recursoId recorre cada entrada una
- * sola vez, y solo los N ganadores se cruzan despues con `archivos`. Ademas
- * asi aparecen tambien archivos ya eliminados definitivamente, cuyo nombre se
- * conserva en `recursoNombre` (denormalizado justamente para esto).
- */
+// Reporte 3: archivos con mas operaciones.
+// Parte de actividad: se agrupa una vez y solo el top se cruza con archivos.
+// Asi salen tambien los eliminados, gracias a recursoNombre.
 export async function archivosConMasOperaciones(consulta) {
   rechazarCamposDesconocidos(consulta, ['limite', 'desde', 'hasta']);
   const limite = leerEntero(consulta.limite, 'limite', { minimo: 1, maximo: 100, defecto: 10 });
   const rango = leerRangoFechas(consulta);
 
   return Actividad.aggregate([
-    // 1. Solo operaciones sobre archivos (y en el rango, si se pidio).
+    // 1. Operaciones sobre archivos.
     { $match: { recursoTipo: 'ARCHIVO', ...(rango && { fecha: rango }) } },
-    // 2. Primer agrupamiento: por archivo Y accion, para el desglose.
+    // 2. Agrupar por archivo y accion.
     {
       $group: {
         _id: { archivo: '$recursoId', accion: '$accion' },
         cantidad: { $sum: 1 },
         ultima: { $max: '$fecha' },
-        // El nombre de la entrada mas reciente de este grupo.
         nombre: { $top: { sortBy: { fecha: -1 }, output: '$recursoNombre' } },
       },
     },
-    // 3. Segundo agrupamiento: por archivo, juntando el desglose por accion.
+    // 3. Agrupar por archivo con el desglose por accion.
     {
       $group: {
         _id: '$_id.archivo',
@@ -198,10 +163,10 @@ export async function archivosConMasOperaciones(consulta) {
         nombreEnHistorial: { $top: { sortBy: { ultima: -1 }, output: '$nombre' } },
       },
     },
-    // 4. Los de mas operaciones primero; desempate por actividad mas reciente.
+    // 4. Top N.
     { $sort: { operaciones: -1, ultimaOperacion: -1 } },
     { $limit: limite },
-    // 5. Datos actuales del archivo, si todavia existe.
+    // 5. Datos actuales del archivo, si existe.
     {
       $lookup: {
         from: ARCHIVOS,
@@ -213,7 +178,7 @@ export async function archivosConMasOperaciones(consulta) {
     },
     { $unwind: { path: '$archivo', preserveNullAndEmptyArrays: true } },
     ...etapasPropietario('archivo.propietarioId', 'propietario'),
-    // 6. Forma final. `existe: false` = eliminado definitivamente.
+    // 6. existe: false = eliminado definitivamente.
     {
       $project: {
         _id: 0,
@@ -225,30 +190,15 @@ export async function archivosConMasOperaciones(consulta) {
         propietario: 1,
         operaciones: 1,
         ultimaOperacion: 1,
-        // El desglose, de la accion mas frecuente a la menos.
         porAccion: { $sortArray: { input: '$porAccion', sortBy: { cantidad: -1 } } },
       },
     },
   ]);
 }
 
-/**
- * Reporte 14 — Carpetas con mayor cantidad de archivos.
- * GET /api/reportes/archivos/carpetas-mas-archivos[?contar=directos|subarbol&usuarioId=&limite=10]
- *
- * Cuenta dos cosas por carpeta: los archivos que estan DIRECTAMENTE en ella
- * y los de TODO su subarbol (subcarpetas incluidas). `?contar` elige por cual
- * se ordena; por defecto, los directos (si no, las carpetas raiz ganarian
- * siempre, porque su subarbol lo contiene todo).
- *
- * Array of Ancestors en accion: un archivo esta en el subarbol de C si C
- * aparece en su `ancestros`. El $lookup con localField `_id` y foreignField
- * `ancestros` busca exactamente eso, usando el indice {ancestros: 1}, y en la
- * misma pasada distingue los directos (carpetaId = C). Sin el array habria
- * que recorrer el arbol hacia abajo carpeta por carpeta.
- *
- * Los archivos en la papelera no cuentan: ya no estan "en" la carpeta.
- */
+// Reporte 14: carpetas con mas archivos, directos o en todo el subarbol.
+// Por defecto directos; si no, las carpetas raiz siempre ganarian.
+// El $lookup por ancestros trae el subarbol usando el indice.
 export async function carpetasConMasArchivos(consulta) {
   rechazarCamposDesconocidos(consulta, ['contar', 'usuarioId', 'limite']);
   const limite = leerEntero(consulta.limite, 'limite', { minimo: 1, maximo: 100, defecto: 10 });
@@ -261,11 +211,9 @@ export async function carpetasConMasArchivos(consulta) {
 
   const campoOrden = contar === 'directos' ? 'archivosDirectos' : 'archivosSubarbol';
   return Carpeta.aggregate([
-    // 1. Carpetas activas (de un usuario, si se pidio).
+    // 1. Carpetas activas.
     { $match: filtro },
-    // 2. Archivos activos de su subarbol, ya resumidos dentro del $lookup:
-    //    a la etapa siguiente llega un solo documento con los totales, no la
-    //    lista de archivos.
+    // 2. Contar los archivos del subarbol dentro del $lookup.
     {
       $lookup: {
         from: ARCHIVOS,
@@ -287,7 +235,7 @@ export async function carpetasConMasArchivos(consulta) {
         as: 'conteo',
       },
     },
-    // 3. Aplana el conteo; una carpeta sin archivos queda en 0.
+    // 3. Sin archivos = 0.
     {
       $set: {
         archivosDirectos: { $ifNull: [{ $first: '$conteo.directos' }, 0] },
@@ -296,9 +244,9 @@ export async function carpetasConMasArchivos(consulta) {
         bytesSubarbol: { $ifNull: [{ $first: '$conteo.bytesSubarbol' }, 0] },
       },
     },
-    // 4. Solo carpetas con al menos un archivo segun el criterio elegido.
+    // 4. Quitar las vacias.
     { $match: { [campoOrden]: { $gt: 0 } } },
-    // 5. Las de mas archivos primero; desempate por el otro conteo y la ruta.
+    // 5. Top N.
     { $sort: { [campoOrden]: -1, archivosSubarbol: -1, ruta: 1 } },
     { $limit: limite },
     ...etapasPropietario(),
@@ -311,7 +259,6 @@ export async function carpetasConMasArchivos(consulta) {
         archivosSubarbol: 1,
         bytesDirectos: 1,
         bytesSubarbol: 1,
-        // Profundidad = cuantas carpetas tiene por encima.
         nivel: { $add: [{ $size: '$ancestros' }, 1] },
       },
     },

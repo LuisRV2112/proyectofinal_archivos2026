@@ -1,8 +1,4 @@
-/*
- * Estilos globales: variables de color y componentes basicos (botones,
- * campos, tablas, alertas, dialogos) que reutilizan todas las pantallas.
- * Sencillo a proposito: la fase pide no invertir de mas en diseno.
- */
+/* Estilos globales: colores, botones, campos, tablas y dialogos. */
 :root {
   --fondo: #f4f6f9;
   --superficie: #ffffff;

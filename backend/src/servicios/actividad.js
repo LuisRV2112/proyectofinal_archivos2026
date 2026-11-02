@@ -3,19 +3,8 @@ import { ErrorProhibido, ErrorValidacion } from '../utilidades/errores.js';
 import { etapasPaginacion, leerPaginacion, leerRangoFechas, respuestaPaginada } from '../utilidades/consultas.js';
 import { exigirObjectId, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
 
-/**
- * Inserta una entrada en el historial (coleccion `actividad`).
- *
- * NUNCA lanza. Se llama despues de que la operacion principal ya se completo
- * (el archivo ya se subio, la carpeta ya se movio): si el registro fallara y
- * el error subiera, el cliente recibiria un 500 por algo que en realidad si
- * ocurrio, y podria reintentarlo y duplicarlo. El historial es secundario
- * respecto de la operacion, asi que un fallo aqui solo se deja en la consola.
- *
- * Por eso tampoco hace falta envolverlo en try/catch al llamarlo; se puede
- * esperar con `await` para que la entrada exista antes de responder (util en
- * las pruebas) sin riesgo de romper nada.
- */
+// Nunca lanza: se llama cuando la operacion ya se hizo, y un error aqui
+// devolveria 500 por algo que si ocurrio. Solo se registra en consola.
 export async function registrarActividad({
   usuarioId = null,
   accion,
@@ -34,12 +23,8 @@ export async function registrarActividad({
   }
 }
 
-/**
- * Filtro comun del historial y de los reportes de actividad, a partir de la
- * URL: ?accion, ?recursoTipo, ?recursoId, ?desde, ?hasta. Cada valor se
- * valida antes de llegar al $match (un valor fuera del enum da 400, no una
- * lista vacia que parezca "no hubo actividad").
- */
+// Filtro del historial y de los reportes de actividad. Un valor invalido da
+// 400 en vez de una lista vacia.
 export function filtroActividad(consulta, { rangoObligatorio = false } = {}) {
   const filtro = {};
   if (consulta.accion !== undefined) {
@@ -58,13 +43,7 @@ export function filtroActividad(consulta, { rangoObligatorio = false } = {}) {
   return filtro;
 }
 
-/**
- * Historial: GET /api/actividad[?usuarioId&accion&recursoTipo&recursoId&desde&hasta&pagina&limite]
- *
- * El administrador ve el de todos (y puede filtrar por usuario); un usuario
- * normal solo el SUYO: su usuarioId se impone en el filtro, y pedir el de
- * otro es un 403 explicito en vez de ignorarse en silencio.
- */
+// El administrador ve todo; el usuario solo el suyo (403 si pide otro).
 export async function listarActividad(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, ['usuarioId', 'accion', 'recursoTipo', 'recursoId', 'desde', 'hasta', 'pagina', 'limite']);
   const filtro = filtroActividad(consulta);
@@ -79,15 +58,10 @@ export async function listarActividad(consulta, usuario) {
   }
 
   const resultado = await Actividad.aggregate([
-    // 1. Filtros. Con usuarioId usa el indice {usuarioId: 1, fecha: -1}; sin
-    //    el, el indice {fecha: -1} (o {accion: 1} si se filtro por accion).
+    // Usa {usuarioId, fecha} o {fecha} segun el filtro.
     { $match: filtro },
-    // 2. Lo mas reciente primero.
     { $sort: { fecha: -1, _id: -1 } },
-    // 3. Total + pagina; el nombre de quien la hizo solo para las filas
-    //    devueltas. Un LOGIN_FALLIDO con un username inexistente no tiene
-    //    usuarioId: su fila queda con usuario null (el nombre intentado esta
-    //    en recursoNombre).
+    // $lookup solo sobre la pagina. LOGIN_FALLIDO puede quedar con usuario null.
     ...etapasPaginacion(paginacion, [
       {
         $lookup: {

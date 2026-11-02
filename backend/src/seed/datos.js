@@ -1,15 +1,5 @@
-/**
- * Datos de la carga inicial.
- *
- * No son documentos listos para insertar: son la DESCRIPCION de lo que existe
- * (usuarios, carpetas, archivos) y una LINEA DE TIEMPO de operaciones. seed.js
- * reproduce esa linea de tiempo en orden, y cada operacion modifica los datos
- * y deja su entrada de historial con la fecha simulada. Asi la base termina
- * siendo el resultado de operaciones que de verdad "ocurrieron", y no un
- * monton de datos sueltos que podrian contradecirse.
- *
- * Personas, empresas y dominios de correo son ficticios.
- */
+// Datos de la carga inicial: lo que existe y una linea de tiempo de
+// operaciones que seed.js reproduce en orden. Datos ficticios.
 import {
   contrato, contratoTexto, acta, minuta, factura, politica, procedimientoTexto,
   presupuestoTexto, informe, notas, tablaMarkdown, quetzales, EMPRESA,
@@ -17,9 +7,7 @@ import {
 
 export const CONTRASENA_PRUEBA = 'Documental2026!';
 
-// ---------------------------------------------------------------------------
 // Usuarios
-// ---------------------------------------------------------------------------
 
 export const USUARIOS = [
   { username: 'admin', email: 'admin@nexo-consultores.example', nombreCompleto: 'Andrés Salazar Medina', rol: 'ADMINISTRADOR' },
@@ -28,18 +16,14 @@ export const USUARIOS = [
   { username: 'cperez', email: 'cperez@nexo-consultores.example', nombreCompleto: 'Carmen Pérez Vargas', rol: 'USUARIO' },
 ];
 
-// ---------------------------------------------------------------------------
-// Carpetas: clave = ruta final -> propietario
-// ---------------------------------------------------------------------------
-// La clave es la ruta donde la carpeta queda al final de la simulacion. Si una
-// carpeta se crea en otro lugar y luego se mueve, la operacion de creacion
-// indica su padre inicial (ver LINEA_DE_TIEMPO).
+// Carpetas: ruta final -> propietario. Si se mueve, la creacion indica el
+// padre inicial.
 
 export const CARPETAS = {
   // admin
   '/Administración': 'admin',
   '/Administración/Manuales': 'admin',
-  // mgarcia — Asesoría Legal (3 niveles: Contratos > Clientes > 2026)
+  // mgarcia — Asesoría Legal
   '/Contratos': 'mgarcia',
   '/Contratos/Clientes': 'mgarcia',
   '/Contratos/Clientes/2026': 'mgarcia',
@@ -60,12 +44,8 @@ export const CARPETAS = {
   '/Proyectos/Implementación ERP/Entregables': 'cperez',
 };
 
-// ---------------------------------------------------------------------------
-// Archivos: clave = nombre final
-// ---------------------------------------------------------------------------
-// `carpeta` es la ubicacion final (null = raiz). `contenido` es una funcion
-// para que el texto se genere al subirlo y la verificacion pueda volver a
-// generarlo y compararlo byte a byte con lo que hay en GridFS.
+// Archivos: nombre final. contenido es una funcion para que la
+// verificacion pueda regenerarlo y compararlo con GridFS.
 
 const A = (nombre, propietario, carpeta, etiquetas, contenido) => ({ nombre, propietario, carpeta, etiquetas, contenido });
 
@@ -908,9 +888,7 @@ ${tablaMarkdown(['Caso', 'Requisito', 'Descripción', 'Resultado esperado'], [
     ],
   })),
 
-  // ===== jlopez — archivo que se sube por error y se elimina definitivamente =====
-  // No existira al final: demuestra que el historial sigue siendo legible
-  // gracias a `recursoNombre`, y que el almacenamiento se descuenta.
+  // ===== jlopez — se sube por error y se elimina definitivamente =====
   A('factura-F001-000231-duplicado.txt', 'jlopez', '/Finanzas/Facturas', ['factura'], () => factura({
     serie: 'F001', numero: '000231', fecha: '15 de abril de 2026',
     cliente: 'Transportes Del Sur, S.A.', nitCliente: '4561237-8', direccion: 'Km 14.5 Carretera al Pacífico, Villa Nueva',
@@ -919,14 +897,7 @@ ${tablaMarkdown(['Caso', 'Requisito', 'Descripción', 'Resultado esperado'], [
   })),
 ];
 
-// ---------------------------------------------------------------------------
-// Linea de tiempo
-// ---------------------------------------------------------------------------
-// Cada mes agrupa sus operaciones en orden. seed.js reparte las operaciones de
-// cada mes dentro del horario laboral (lunes a viernes, 8:00-17:30, hora de
-// Guatemala), conservando el orden. El actor de una operacion sobre un recurso
-// propio es su propietario; las descargas y lo que hace el administrador
-// indican el actor explicitamente.
+// Linea de tiempo por mes. Se reparte de lunes a viernes, 8:00-17:30.
 
 const crearUsuario = (username) => ({ tipo: 'CREAR_USUARIO', actor: 'admin', username });
 const crearCarpeta = (clave, padreInicial) => ({ tipo: 'CREAR_CARPETA', clave, padreInicial });
@@ -1031,9 +1002,7 @@ export const LINEA_DE_TIEMPO = [
       renombrar('acta-comite-legal-2026-05.txt'),
       subir('plan-capacitacion-2026.md'),
       compartirArchivo('plan-capacitacion-2026.md', 'jlopez', 'COMENTARIO'),
-      // "2026" se crea por error directamente bajo /Contratos y luego se mueve
-      // a /Contratos/Clientes con sus archivos dentro: obliga a recalcular
-      // ancestros y ruta de todo el subarbol.
+      // "2026" se crea en /Contratos y luego se mueve a /Contratos/Clientes.
       crearCarpeta('/Contratos/Clientes/2026', '/Contratos'),
       subir('contrato-consultoria-agroexport-2026.md'),
       subir('acuerdo-confidencialidad-agroexport.txt'),
@@ -1042,8 +1011,7 @@ export const LINEA_DE_TIEMPO = [
       compartirCarpeta('/Contratos/Clientes', 'cperez', 'LECTURA'),
       compartirArchivo('contrato-consultoria-agroexport-2026.md', 'jlopez', 'EDICION'),
       descargar('jlopez', 'contrato-consultoria-agroexport-2026.md'),
-      // cperez ya tiene LECTURA heredada de /Contratos/Clientes; el permiso
-      // directo es mayor, asi que gana COMENTARIO.
+      // Tiene LECTURA heredada; gana COMENTARIO.
       compartirArchivo('acuerdo-confidencialidad-agroexport.txt', 'cperez', 'COMENTARIO'),
       descargar('cperez', 'contrato-servicios-transportes-delsur.md'),
       crearCarpeta('/Proyectos'),
@@ -1075,10 +1043,8 @@ export const LINEA_DE_TIEMPO = [
       subir('minuta-seguimiento-erp-01.txt'),
       subir('cronograma-erp.txt', { nombreInicial: 'cronograma-v2.txt' }),
       renombrar('cronograma-erp.txt'),
-      // La matriz se compartio solo para una revision puntual.
       revocarArchivo('matriz-riesgos-erp.md', 'mgarcia'),
       descargar('jlopez', 'cronograma-erp.txt'),
-      // Eliminada por error y restaurada el mismo mes.
       eliminarArchivo('politica-vacaciones.md'),
       restaurarArchivo('politica-vacaciones.md'),
     ],
@@ -1114,7 +1080,7 @@ export const LINEA_DE_TIEMPO = [
       subir('registro-facturas-pendientes.md'),
       compartirArchivo('registro-facturas-pendientes.md', 'admin', 'COMENTARIO'),
       descargar('admin', 'registro-facturas-pendientes.md'),
-      // Manda a la papelera la carpeta y, en cascada, Antiguos y sus 2 archivos.
+      // En cascada con Antiguos y sus 2 archivos.
       eliminarCarpeta('/Borradores'),
       subir('directorio-telefonico-interno.txt'),
       compartirArchivo('directorio-telefonico-interno.txt', 'mgarcia', 'LECTURA'),
@@ -1132,8 +1098,7 @@ export const LINEA_DE_TIEMPO = [
       descargar('jlopez', 'informe-avance-erp-septiembre.md'),
       descargar('admin', 'informe-avance-erp-septiembre.md'),
       subir('lista-tareas-semana.txt'),
-      // cperez ya lee el manual por la carpeta compartida; ahora tambien lo
-      // edita: el permiso directo EDICION gana sobre LECTURA heredada.
+      // EDICION directa gana sobre LECTURA heredada.
       compartirArchivo('manual-uso-sistema-documental.md', 'cperez', 'EDICION'),
       descargar('cperez', 'manual-uso-sistema-documental.md'),
       eliminarArchivo('minuta-seguimiento-erp-02.txt'),

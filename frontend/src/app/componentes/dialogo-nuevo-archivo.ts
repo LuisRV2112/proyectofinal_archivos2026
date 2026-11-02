@@ -8,12 +8,8 @@ export interface NuevoArchivo {
   etiquetas: string;
 }
 
-/**
- * Crear un archivo escribiendo su contenido en la aplicacion, sin tenerlo en
- * el equipo. El nombre se arma con la extension elegida en una lista, asi no
- * se puede escribir una extension que el backend rechazaria. Los errores
- * (nombre repetido, sin espacio) los devuelve la API y llegan por `error`.
- */
+// Crear un archivo escribiendo el texto. La extension se elige de una lista
+// para que no se pueda poner una invalida.
 @Component({
   selector: 'app-dialogo-nuevo-archivo',
   imports: [FormsModule],

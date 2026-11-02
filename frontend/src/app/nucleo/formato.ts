@@ -1,6 +1,6 @@
 import { Pipe, PipeTransform } from '@angular/core';
 
-/** 1536 -> "1.5 KB". La API entrega bytes crudos; la interfaz nunca los muestra asi. */
+// 1536 -> "1.5 KB"
 export function formatearBytes(bytes: number | null | undefined): string {
   if (bytes == null || Number.isNaN(bytes)) return '—';
   if (bytes < 1024) return `${bytes} B`;

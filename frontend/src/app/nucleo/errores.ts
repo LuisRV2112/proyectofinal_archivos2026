@@ -1,17 +1,12 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { ErrorApi } from './modelos';
 
-/**
- * Convierte un error HTTP en el mensaje que se muestra al usuario. El backend
- * siempre responde {estado, error, detalle}: se muestra ese texto ("Ya existe
- * una carpeta llamada Contratos") y no un "error" generico.
- */
+// Muestra el mensaje { error, detalle } que envia el backend.
 export function mensajeDeError(error: unknown): string {
   if (error instanceof HttpErrorResponse) {
-    // estado 0: la peticion ni siquiera llego (backend apagado, CORS, red).
+    // 0: no llego al servidor
     if (error.status === 0) return 'No se pudo conectar con el servidor. ¿Está encendido el backend?';
-    // Con responseType 'text' el cuerpo del error llega como texto: se
-    // intenta leer como JSON igual.
+    // Con responseType 'text' el error llega como texto.
     let cuerpo = error.error as Partial<ErrorApi> | string | null;
     if (typeof cuerpo === 'string') {
       try {

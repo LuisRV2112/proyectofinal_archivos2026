@@ -6,19 +6,9 @@ import { Almacenamiento, Sesion } from './modelos';
 
 const CLAVE_SESION = 'gestion-documental.sesion';
 
-/**
- * Sesion del usuario: login, token y cierre de sesion.
- *
- * La API es sin estado (JWT): el servidor no guarda sesiones, asi que el
- * cliente conserva el token y lo envia en cada peticion (lo agrega el
- * interceptor). Se guarda en localStorage para que recargar la pagina no
- * cierre la sesion.
- *
- * Los datos del usuario que se guardan aqui son solo para la interfaz
- * (mostrar el nombre, armar el menu segun el rol). La seguridad real esta en
- * el backend, que verifica el token y el rol en cada peticion: alguien que
- * edite localStorage solo cambiaria lo que ve, no lo que puede hacer.
- */
+// El servidor no guarda sesiones (JWT), asi que el token se guarda en
+// localStorage. El rol guardado solo cambia lo que se muestra; el backend
+// valida todo en cada peticion.
 @Injectable({ providedIn: 'root' })
 export class Autenticacion {
   private readonly http = inject(HttpClient);
@@ -26,7 +16,7 @@ export class Autenticacion {
   readonly sesion = signal<Sesion | null>(leerSesionGuardada());
   readonly haySesion = computed(() => this.sesion() !== null);
   readonly esAdministrador = computed(() => this.sesion()?.rol === 'ADMINISTRADOR');
-  /** Espacio asignado, usado y disponible; se refresca tras subir o borrar. */
+  // Se refresca al subir o borrar.
   readonly almacenamiento = signal<Almacenamiento | null>(null);
 
   iniciarSesion(username: string, password: string): Observable<Sesion> {
@@ -44,14 +34,14 @@ export class Autenticacion {
     this.almacenamiento.set(null);
   }
 
-  /** GET /api/auth/yo: datos actuales del usuario, incluido su almacenamiento. */
+  // GET /api/auth/yo
   refrescarPerfil() {
     type Perfil = Pick<Sesion, 'nombreCompleto' | 'email'> & Almacenamiento;
     this.http.get<Perfil>(`${URL_API}/auth/yo`).subscribe({
       next: (perfil) => {
         const { almacenamientoUsado, cuotaAlmacenamiento, almacenamientoDisponible } = perfil;
         this.almacenamiento.set({ almacenamientoUsado, cuotaAlmacenamiento, almacenamientoDisponible });
-        // Nombre y correo pueden haber cambiado (el admin se edito a si mismo).
+        // Por si el administrador se edito a si mismo.
         const sesion = this.sesion();
         if (sesion && (sesion.nombreCompleto !== perfil.nombreCompleto || sesion.email !== perfil.email)) {
           const actualizada = { ...sesion, nombreCompleto: perfil.nombreCompleto, email: perfil.email };
@@ -59,11 +49,11 @@ export class Autenticacion {
           this.sesion.set(actualizada);
         }
       },
-      error: () => {}, // Dato accesorio; un 401 ya lo maneja el interceptor.
+      error: () => {}, // El 401 lo maneja el interceptor.
     });
   }
 
-  /** El token vigente, o null si no hay sesion o ya expiro. */
+  // null si no hay sesion o expiro.
   token(): string | null {
     const sesion = this.sesion();
     if (!sesion) return null;
@@ -86,11 +76,8 @@ function leerSesionGuardada(): Sesion | null {
   }
 }
 
-/**
- * Lee el campo `exp` del JWT (segundos desde 1970). El payload es JSON en
- * base64url: se puede leer sin la clave, pero NO verificar; eso lo hace el
- * backend. Aqui solo sirve para no enviar un token que ya se sabe vencido.
- */
+// Lee exp del JWT sin verificarlo (eso lo hace el backend), solo para no
+// enviar un token vencido.
 function tokenExpirado(token: string): boolean {
   try {
     const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));

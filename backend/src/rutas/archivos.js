@@ -33,19 +33,15 @@ router.get('/:id', async (req, res) => {
 
 router.get('/:id/descargar', async (req, res) => {
   const { archivo, flujo } = await prepararDescarga(req.params.id, req.usuario);
-  // attachment = el navegador lo guarda en vez de mostrarlo. res.attachment
-  // codifica el nombre (filename*=UTF-8''...) para que las tildes lleguen bien.
-  // Va antes de res.type porque tambien fija un Content-Type (sin charset).
+  // attachment antes de type porque tambien fija el Content-Type.
   res.attachment(archivo.nombre);
   res.type(`${archivo.mimeType}; charset=utf-8`);
   res.set('Content-Length', String(archivo.tamano));
-  // Si el stream falla a medias ya no se puede enviar un error JSON (las
-  // cabeceras salieron); pipeline corta la conexion y el cliente ve la
-  // descarga incompleta.
+  // Si falla a medias ya se enviaron las cabeceras; solo se registra.
   await pipeline(flujo, res).catch((error) => console.error(`[descarga] ${archivo._id}: ${error.message}`));
 });
 
-// inline = para mostrarlo dentro de la aplicacion (vista previa)
+// Vista previa
 router.get('/:id/contenido', async (req, res) => {
   const { texto } = await leerTexto(req.params.id, req.usuario);
   res.type('text/plain; charset=utf-8').set('Content-Disposition', 'inline').send(texto);
@@ -61,7 +57,7 @@ router.patch('/:id/mover', async (req, res) => {
   res.json(await moverArchivo(req.params.id, req.body, req.usuario));
 });
 
-// A la papelera (no borra; ver servicios/papelera.js)
+// A la papelera
 router.delete('/:id', async (req, res) => {
   res.json(await enviarArchivoAPapelera(req.params.id, req.usuario));
 });

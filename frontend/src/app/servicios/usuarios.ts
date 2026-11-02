@@ -10,14 +10,14 @@ export interface NuevoUsuario {
   nombreCompleto: string;
   rol: Rol;
   password: string;
-  /** Bytes asignados; si se omite, el backend aplica la cuota por defecto (20 MB). */
+  // Bytes. Por defecto 20 MB.
   cuotaAlmacenamiento?: number;
 }
 
-/** El username no se modifica: es el identificador de inicio de sesion. */
+// El username no se puede cambiar.
 export type CambiosUsuario = Partial<Omit<NuevoUsuario, 'username'>>;
 
-/** Gestion de usuarios (/api/usuarios): toda la API es solo del administrador. */
+// Solo administrador.
 @Injectable({ providedIn: 'root' })
 export class UsuariosApi {
   private readonly http = inject(HttpClient);

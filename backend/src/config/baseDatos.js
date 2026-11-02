@@ -1,12 +1,6 @@
 import mongoose from 'mongoose';
 
-/**
- * Conecta Mongoose a MongoDB usando MONGODB_URI del .env.
- *
- * serverSelectionTimeoutMS en 5 s: si mongod no esta corriendo, el arranque
- * falla rapido con un mensaje claro en vez de quedarse colgado 30 s (el valor
- * por defecto del driver) sin decir nada.
- */
+// 5 s de espera: si mongod no esta activo falla rapido en vez de esperar 30 s.
 export async function conectarBaseDatos() {
   const uri = process.env.MONGODB_URI;
   if (!uri) {

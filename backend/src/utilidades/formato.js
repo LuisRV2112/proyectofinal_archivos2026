@@ -1,4 +1,4 @@
-/** Tamano legible para mensajes e historial: 2150 -> "2.1 KB". */
+// 2150 -> "2.1 KB"
 export function formatearBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
   const unidades = ['KB', 'MB', 'GB'];
@@ -11,7 +11,7 @@ export function formatearBytes(bytes) {
   return `${valor.toFixed(1)} ${unidades[i]}`;
 }
 
-/** "Contrato.Final.MD" -> "md"; "" si no tiene extension. */
+// "Contrato.Final.MD" -> "md"
 export function extensionDe(nombre) {
   const punto = nombre.lastIndexOf('.');
   return punto > 0 ? nombre.slice(punto + 1).toLowerCase() : '';

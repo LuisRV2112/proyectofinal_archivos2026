@@ -9,8 +9,7 @@ router.post('/login', async (req, res) => {
   res.json(await iniciarSesion(req.body));
 });
 
-// GET /api/auth/yo → el usuario del token, con su almacenamiento asignado,
-// usado y disponible
+// GET /api/auth/yo → usuario del token con su almacenamiento
 router.get('/yo', autenticar, (req, res) => {
   const { almacenamientoUsado, cuotaAlmacenamiento, almacenamientoDisponible } = req.usuario;
   res.json({ ...perfil(req.usuario), almacenamientoUsado, cuotaAlmacenamiento, almacenamientoDisponible });

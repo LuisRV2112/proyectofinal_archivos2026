@@ -3,15 +3,8 @@ import { mensajeDeError } from '../nucleo/errores';
 import { Carpeta, Miga } from '../nucleo/modelos';
 import { Documentos } from '../servicios/documentos';
 
-/**
- * Elige una carpeta destino recorriendo el arbol del usuario nivel por nivel
- * (para mover, o para acotar una busqueda). Cada nivel se pide a la API al
- * entrar, igual que en el explorador, en vez de cargar todo el arbol.
- *
- * `excluirId`: la carpeta que se esta moviendo no se puede abrir ni elegir
- * (no se puede mover dentro de si misma). La regla completa contra ciclos la
- * aplica la API con `ancestros`; esto solo evita ofrecer lo que se sabe invalido.
- */
+// Elige una carpeta cargando un nivel a la vez. excluirId oculta la carpeta
+// que se mueve; los ciclos los valida la API.
 @Component({
   selector: 'app-selector-carpeta',
   template: `

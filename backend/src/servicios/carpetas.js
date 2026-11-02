@@ -5,30 +5,20 @@ import { registrarActividad } from './actividad.js';
 import { COLACION_NOMBRES, reubicarSubarbol, ubicacionDentroDe, validarNombreLibre } from './arbol.js';
 import { exigirNivel, exigirPropietario } from './permisos.js';
 
-// Los listados nunca muestran lo que esta en la papelera (regla 5.3). Usa el
-// indice {"eliminado.estado": 1}.
+// Los listados excluyen la papelera.
 const NO_ELIMINADO = { 'eliminado.estado': false };
 
-// El contenido del archivo esta en GridFS; su id es un dato interno que el
-// cliente no necesita para navegar (descarga por /api/archivos/:id).
+// El cliente no necesita el id de GridFS.
 const CAMPOS_ARCHIVO_LISTADO = '-gridfsId';
 
-/**
- * Busca una carpeta que no este en la papelera. Una carpeta eliminada se
- * trata como inexistente (404) en las operaciones normales: solo se gestiona
- * desde la papelera.
- */
+// Una carpeta en la papelera se trata como inexistente.
 async function buscarCarpetaActiva(id, campo = 'id de carpeta') {
   const carpeta = await Carpeta.findOne({ _id: exigirObjectId(id, campo), ...NO_ELIMINADO });
   if (!carpeta) throw new ErrorNoEncontrado('Carpeta no encontrada', 'No existe o está en la papelera');
   return carpeta;
 }
 
-/**
- * Normaliza y valida el nombre con las MISMAS reglas del esquema (longitud,
- * sin barras). Hace falta porque mover y renombrar escriben con bulkWrite, que
- * no ejecuta los validadores del esquema.
- */
+// Se valida aqui porque bulkWrite no ejecuta los validadores del esquema.
 function validarNombre(valor) {
   const nombre = exigirTexto(valor, 'nombre');
   if (nombre === '.' || nombre === '..') throw new ErrorValidacion('Nombre de carpeta no válido');
@@ -37,24 +27,19 @@ function validarNombre(valor) {
   return nombre;
 }
 
-/** Lee `padreId` del cuerpo: null (o ausente al crear) = raiz del usuario. */
+// null = raiz
 async function leerDestino(padreId, usuario) {
   if (padreId === null || padreId === undefined) return null;
   const padre = await buscarCarpetaActiva(padreId, 'padreId');
-  // Solo dentro de carpetas propias, aunque se tenga EDICION: lo creado
-  // dentro tendria otro propietario que la carpeta, ocuparia el espacio de
-  // quien lo sube en el arbol de otro, y el propietario de la carpeta no
-  // podria moverlo ni eliminarlo. El arbol de cada usuario es solo suyo.
+  // Solo en carpetas propias: si no, quedaria contenido de otro propietario
+  // dentro de su arbol.
   exigirPropietario(padre, usuario, 'crear o mover elementos dentro de esta carpeta');
   return padre;
 }
 
-/** Subcarpetas y archivos directos de una ubicacion, ordenados por nombre. */
 async function contenidoDe(propietarioId, carpetaId) {
   const [carpetas, archivos] = await Promise.all([
-    // Indice {propietarioId: 1, padreId: 1}.
     Carpeta.find({ propietarioId, padreId: carpetaId, ...NO_ELIMINADO }).collation(COLACION_NOMBRES).sort({ nombre: 1 }),
-    // Indice {propietarioId: 1, carpetaId: 1}.
     Archivo.find({ propietarioId, carpetaId, ...NO_ELIMINADO })
       .select(CAMPOS_ARCHIVO_LISTADO)
       .collation(COLACION_NOMBRES)
@@ -63,14 +48,7 @@ async function contenidoDe(propietarioId, carpetaId) {
   return { carpetas, archivos };
 }
 
-/**
- * GET /api/carpetas/raiz — lo que hay en la raiz del usuario: carpetas con
- * padreId null y archivos con carpetaId null. Se devuelven ambos para que la
- * raiz se navegue igual que cualquier otra carpeta.
- *
- * El administrador puede consultar la raiz de otro usuario con
- * ?propietarioId=.
- */
+// GET /api/carpetas/raiz. El administrador puede pasar ?propietarioId.
 export async function listarRaiz(usuario, consulta = {}) {
   let propietarioId = usuario._id;
   if (consulta.propietarioId !== undefined) {
@@ -82,17 +60,8 @@ export async function listarRaiz(usuario, consulta = {}) {
   return { propietarioId, ...(await contenidoDe(propietarioId, null)) };
 }
 
-/**
- * GET /api/carpetas/:id — la carpeta, su contenido directo, la ruta de migas
- * y el nivel de acceso del usuario (para que el cliente sepa que mostrar).
- *
- * Las migas salen de `ancestros`: ya estan en el documento, ordenados de la
- * raiz hacia abajo, asi que basta UNA consulta por _id (indice _id) para leer
- * sus nombres, sin recorrer el arbol hacia arriba padre por padre.
- *
- * El contenido se lista por el propietario de la carpeta: quien entra por un
- * permiso compartido ve todo lo que hay dentro (herencia), no solo lo suyo.
- */
+// GET /api/carpetas/:id: carpeta, contenido, migas y nivel de acceso.
+// Las migas salen de ancestros con una sola consulta por _id.
 export async function obtenerCarpeta(id, usuario) {
   const carpeta = await buscarCarpetaActiva(id);
   const acceso = await exigirNivel(carpeta, usuario, 'LECTURA');
@@ -102,13 +71,11 @@ export async function obtenerCarpeta(id, usuario) {
     contenidoDe(carpeta.propietarioId, carpeta._id),
   ]);
 
-  // $in no respeta el orden del array: se reordena segun `ancestros`.
+  // $in no respeta el orden, se reordena segun ancestros.
   const porId = new Map(ancestros.map((a) => [String(a._id), a]));
   let cadena = carpeta.ancestros.map((aid) => porId.get(String(aid))).filter(Boolean);
 
-  // Quien entra por un permiso compartido solo ve las migas desde la carpeta
-  // mas alta que le compartieron: las de mas arriba son del arbol privado del
-  // propietario y no tiene acceso a ellas.
+  // Si entra por un permiso, las migas empiezan en la carpeta compartida.
   if (acceso.via === 'directo' || acceso.via === 'heredado') {
     const primera = cadena.findIndex((a) => a.compartidoCon?.some((p) => p.usuarioId.equals(usuario._id)));
     cadena = primera === -1 ? [] : cadena.slice(primera);
@@ -118,7 +85,7 @@ export async function obtenerCarpeta(id, usuario) {
   return { carpeta, acceso, migas, ...contenido };
 }
 
-/** POST /api/carpetas — { nombre, padreId? } */
+// POST /api/carpetas
 export async function crearCarpeta(cuerpo, usuario) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['nombre', 'padreId']);
@@ -127,7 +94,6 @@ export async function crearCarpeta(cuerpo, usuario) {
 
   await validarNombreLibre(Carpeta, 'padreId', { propietarioId: usuario._id, padreId: padre?._id, nombre });
 
-  // ancestros = [...padre.ancestros, padre._id]; ruta = padre.ruta + "/" + nombre
   const { ancestros, ruta } = ubicacionDentroDe(padre, nombre);
   const carpeta = await Carpeta.create({
     nombre,
@@ -148,19 +114,13 @@ export async function crearCarpeta(cuerpo, usuario) {
   return carpeta;
 }
 
-/**
- * PATCH /api/carpetas/:id — { nombre }
- *
- * Renombrar no cambia `ancestros` (son ids), pero si la `ruta` de la carpeta
- * y de todas sus subcarpetas ("/Contratos/2026" pasa a "/Legal/2026"), por
- * eso tambien reescribe el subarbol.
- */
+// PATCH /api/carpetas/:id. Los ancestros no cambian, pero la ruta del
+// subarbol si.
 export async function renombrarCarpeta(id, cuerpo, usuario) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['nombre']);
   const nombre = validarNombre(cuerpo.nombre);
   const carpeta = await buscarCarpetaActiva(id);
-  // Renombrar lo puede hacer tambien quien tenga EDICION (directa o heredada).
   await exigirNivel(carpeta, usuario, 'EDICION');
 
   if (nombre === carpeta.nombre) return { carpeta, reubicados: 0 };
@@ -191,9 +151,7 @@ export async function renombrarCarpeta(id, cuerpo, usuario) {
   return { carpeta: await Carpeta.findById(carpeta._id), reubicados };
 }
 
-/**
- * PATCH /api/carpetas/:id/mover — { padreId } (null = a la raiz)
- */
+// PATCH /api/carpetas/:id/mover
 export async function moverCarpeta(id, cuerpo, usuario) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['padreId']);
@@ -205,10 +163,7 @@ export async function moverCarpeta(id, cuerpo, usuario) {
   exigirPropietario(carpeta, usuario, 'mover esta carpeta');
   const destino = await leerDestino(cuerpo.padreId, usuario);
 
-  // Sin ciclos (regla 5.1). Mover A dentro de B es invalido si B es A o si A
-  // esta entre los ancestros de B (B es descendiente de A): A acabaria
-  // dentro de si misma y el arbol dejaria de serlo. Con Array of Ancestors no
-  // hay que recorrer nada: los ancestros de B ya estan en su documento.
+  // Ciclo: el destino es la carpeta o esta dentro de ella.
   if (destino && (destino._id.equals(carpeta._id) || destino.ancestros.some((aid) => aid.equals(carpeta._id)))) {
     throw new ErrorValidacion(
       'No se puede mover una carpeta dentro de sí misma',
@@ -216,7 +171,6 @@ export async function moverCarpeta(id, cuerpo, usuario) {
     );
   }
 
-  // Ya esta ahi: no hay nada que hacer ni que registrar.
   if (String(carpeta.padreId ?? null) === String(destino?._id ?? null)) return { carpeta, reubicados: 0 };
 
   await validarNombreLibre(Carpeta, 'padreId', {

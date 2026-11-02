@@ -1,7 +1,7 @@
 import { Component } from '@angular/core';
 import { RouterOutlet } from '@angular/router';
 
-/** Raiz: solo el router. El menu lateral vive en Layout, fuera del login. */
+// El menu esta en Layout para que no aparezca en el login.
 @Component({
   selector: 'app-root',
   imports: [RouterOutlet],

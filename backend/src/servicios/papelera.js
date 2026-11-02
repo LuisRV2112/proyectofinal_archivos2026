@@ -7,20 +7,10 @@ import { registrarActividad } from './actividad.js';
 import { primerNombreLibre, reubicarSubarbol, ubicacionDentroDe } from './arbol.js';
 import { exigirPropietario } from './permisos.js';
 
-/**
- * Papelera (regla 5.3): eliminar NO borra, marca el subdocumento embebido
- * `eliminado`. Todos los listados filtran {"eliminado.estado": false}, asi
- * que lo marcado desaparece de la vista normal sin perder nada.
- *
- * Como se reconoce lo que se elimino JUNTO con una carpeta: todo el subarbol
- * recibe la MISMA fecha y el MISMO autor que la carpeta. Al restaurarla se
- * traen de vuelta solo los descendientes con esa fecha y autor; algo que se
- * habia eliminado antes por separado (otra fecha) se queda en la papelera,
- * que es lo que el usuario espera.
- *
- * Solo el propietario usa su papelera: eliminar libera (o no) SU espacio y
- * reorganiza SU arbol. Ni EDICION ni el rol de administrador bastan.
- */
+// Eliminar solo marca eliminado.estado; los listados lo filtran.
+// El subarbol de una carpeta recibe la misma fecha y autor, asi al
+// restaurarla vuelve solo lo que se elimino con ella.
+// Solo el propietario usa su papelera.
 
 const TIPOS = {
   archivo: { Modelo: Archivo, recursoTipo: 'ARCHIVO', campoPadre: 'carpetaId' },
@@ -44,20 +34,14 @@ async function buscar(Modelo, id, enPapelera) {
   return recurso;
 }
 
-// ---------------------------------------------------------------------------
 // Enviar a la papelera
-// ---------------------------------------------------------------------------
 
-/** DELETE /api/archivos/:id */
+// DELETE /api/archivos/:id
 export async function enviarArchivoAPapelera(id, usuario) {
   const archivo = await buscar(Archivo, id, false);
   exigirPropietario(archivo, usuario, 'enviar este archivo a la papelera');
 
-  // carpetaId y ancestros NO se tocan: el archivo sigue "estando" donde
-  // estaba (y se mantiene al dia si esa carpeta se mueve). padreOriginalId
-  // guarda a donde volver aunque luego cambie algo.
-  // El almacenamiento NO se libera (regla 5.4): el archivo sigue ocupando
-  // espacio hasta la eliminacion definitiva.
+  // carpetaId y ancestros no cambian. El espacio no se libera todavia.
   archivo.eliminado = { estado: true, fecha: new Date(), eliminadoPor: usuario._id, padreOriginalId: archivo.carpetaId };
   await archivo.save();
 
@@ -73,19 +57,10 @@ export async function enviarArchivoAPapelera(id, usuario) {
   return { enPapelera: true, archivo: archivo._id };
 }
 
-/**
- * DELETE /api/carpetas/:id — la carpeta y TODO su subarbol, en cascada.
- *
- * El subarbol sale de {ancestros: carpetaId} (Array of Ancestors): una
- * consulta indexada por coleccion, a cualquier profundidad. Se marca con
- * updateMany usando un pipeline de agregacion como actualizacion, porque
- * `padreOriginalId` es distinto en cada documento (su propio padre) y el
- * pipeline puede copiarlo de un campo del mismo documento ("$padreId",
- * "$carpetaId") en el servidor, sin traer los documentos a la aplicacion.
- *
- * Lo que ya estaba en la papelera (eliminado antes por separado) no se toca:
- * conserva su fecha y no se restaurara junto con la carpeta.
- */
+// DELETE /api/carpetas/:id, en cascada con {ancestros: id}.
+// El update es un pipeline para copiar padreOriginalId desde el propio
+// documento ($padreId / $carpetaId) sin traerlo a la aplicacion.
+// Lo que ya estaba en la papelera no se toca.
 export async function enviarCarpetaAPapelera(id, usuario) {
   const carpeta = await buscar(Carpeta, id, false);
   exigirPropietario(carpeta, usuario, 'enviar esta carpeta a la papelera');
@@ -101,13 +76,12 @@ export async function enviarCarpetaAPapelera(id, usuario) {
   ];
   const subarbolActivo = { ancestros: carpeta._id, 'eliminado.estado': false };
 
-  // .collection = driver nativo: el pipeline se envia tal cual a MongoDB.
+  // Driver nativo para enviar el pipeline tal cual.
   const [subcarpetas, archivos] = await Promise.all([
     Carpeta.collection.updateMany(subarbolActivo, marca('padreId')),
     Archivo.collection.updateMany(subarbolActivo, marca('carpetaId')),
   ]);
-  // La carpeta, al final: mientras no este marcada, la operacion se puede
-  // repetir y completaria lo que faltara.
+  // La carpeta al final, para poder repetir si algo falla.
   await Carpeta.collection.updateOne({ _id: carpeta._id }, marca('padreId'));
 
   await registrarActividad({
@@ -126,18 +100,10 @@ export async function enviarCarpetaAPapelera(id, usuario) {
   };
 }
 
-// ---------------------------------------------------------------------------
 // Listar
-// ---------------------------------------------------------------------------
 
-/**
- * GET /api/papelera — lo que el usuario elimino, mostrando solo las RAICES de
- * cada eliminacion: una carpeta eliminada aparece una vez, con el resumen de
- * lo que arrastro, no cada uno de sus descendientes por separado.
- *
- * Un elemento es raiz si su carpeta original no esta en la papelera o se
- * elimino en otro momento (distinta fecha).
- */
+// GET /api/papelera. Solo muestra la raiz de cada eliminacion con un
+// resumen de lo que contiene.
 export async function listarPapelera(usuario) {
   const filtro = { propietarioId: usuario._id, 'eliminado.estado': true };
   const [carpetas, archivos] = await Promise.all([
@@ -153,7 +119,6 @@ export async function listarPapelera(usuario) {
     return !padre || !mismaEliminacion(padre, d);
   };
 
-  // Rutas de origen para mostrar "Eliminado desde /Contratos".
   const idsOrigen = [...carpetas, ...archivos].map((d) => d.eliminado.padreOriginalId).filter(Boolean);
   const origenes = new Map(
     (await Carpeta.find({ _id: { $in: idsOrigen } }, { ruta: 1 }).lean()).map((c) => [String(c._id), c.ruta])
@@ -188,19 +153,13 @@ export async function listarPapelera(usuario) {
 
   return {
     elementos: [...raicesCarpetas, ...raicesArchivos].sort((x, y) => y.eliminadoEn - x.eliminadoEn),
-    // Lo que se liberaria vaciando la papelera.
     bytesOcupados: archivos.reduce((suma, a) => suma + a.tamano, 0),
   };
 }
 
-// ---------------------------------------------------------------------------
 // Restaurar
-// ---------------------------------------------------------------------------
 
-/**
- * A donde vuelve un elemento: su carpeta original si sigue existiendo y no
- * esta en la papelera; si no, la raiz del propietario, con un aviso.
- */
+// Carpeta original si sigue activa; si no, la raiz con un aviso.
 async function destinoDeRestauracion(recurso) {
   const original = recurso.eliminado.padreOriginalId;
   if (!original) return { destino: null, aviso: null };
@@ -215,7 +174,7 @@ async function destinoDeRestauracion(recurso) {
   };
 }
 
-/** POST /api/papelera/:tipo/:id/restaurar */
+// POST /api/papelera/:tipo/:id/restaurar
 export async function restaurar(tipo, id, usuario) {
   const { Modelo, recursoTipo, campoPadre } = leerTipo(tipo);
   const recurso = await buscar(Modelo, id, true);
@@ -239,19 +198,15 @@ export async function restaurar(tipo, id, usuario) {
     recurso.nombre = nombre;
     recurso.eliminado = SIN_ELIMINAR;
     await recurso.save();
-    // Si cambio el nombre, el filename de GridFS lo acompana (ver Fase 4).
     if (nombre !== nombreAnterior) {
       await renombrarContenido(recurso.gridfsId, nombre).catch((e) => console.error(`[papelera] ${e.message}`));
     }
   } else {
-    // 1. Ubicacion y nombre definitivos de la carpeta y de todo su subarbol
-    //    (si vuelve a la raiz, sus ancestros y rutas cambian). Si vuelve a su
-    //    sitio sin cambios, el recalculo deja todo igual.
+    // 1. Recalcular ancestros y rutas por si vuelve a la raiz.
     const { ancestros, ruta } = ubicacionDentroDe(destino, nombre);
     await reubicarSubarbol(recurso, { padreId: destino?._id ?? null, ancestrosNuevos: ancestros, rutaNueva: ruta, nombreNuevo: nombre });
 
-    // 2. Sacar de la papelera lo que se elimino JUNTO con ella (misma fecha y
-    //    autor). Lo eliminado antes por separado se queda.
+    // 2. Restaurar lo que se elimino con ella (misma fecha y autor).
     const delGrupo = {
       ancestros: recurso._id,
       'eliminado.estado': true,
@@ -264,7 +219,7 @@ export async function restaurar(tipo, id, usuario) {
     ]);
     restaurados += subcarpetas.modifiedCount + archivos.modifiedCount;
 
-    // 3. La carpeta, al final.
+    // 3. La carpeta al final.
     await Carpeta.updateOne({ _id: recurso._id }, { $set: { eliminado: SIN_ELIMINAR } });
   }
 
@@ -282,31 +237,17 @@ export async function restaurar(tipo, id, usuario) {
   return { restaurado: true, tipo: recursoTipo, _id: recurso._id, nombre, ubicacion: destino?.ruta ?? '/', restaurados, avisos };
 }
 
-// ---------------------------------------------------------------------------
 // Eliminar definitivamente
-// ---------------------------------------------------------------------------
 
-/**
- * DELETE /api/papelera/:tipo/:id — sin vuelta atras. Borra los documentos, su
- * contenido en GridFS y descuenta el espacio del propietario. En una carpeta,
- * todo su subarbol.
- *
- * Orden: primero los documentos, despues GridFS. Si fallara a medias, lo que
- * puede quedar es contenido sin documento: invisible para el usuario y
- * detectable con un $lookup (contenido.files sin archivo). Al reves quedaria
- * un archivo visible en la papelera cuyo contenido ya no existe.
- *
- * Las entradas del historial NO se borran: guardan `recursoNombre`
- * (denormalizado) justamente para seguir siendo legibles cuando el recurso
- * ya no existe.
- */
+// DELETE /api/papelera/:tipo/:id. Borra documentos, contenido en GridFS y
+// descuenta el espacio.
+// Primero los documentos: si falla a medias queda contenido invisible, no
+// un archivo visible sin contenido. El historial se conserva.
 export async function eliminarDefinitivamente(tipo, id, usuario) {
   const { Modelo, recursoTipo } = leerTipo(tipo);
   const recurso = await buscar(Modelo, id, true);
   exigirPropietario(recurso, usuario, 'eliminar definitivamente este recurso');
 
-  // Archivos y carpetas que desaparecen. En una carpeta, todo el subarbol
-  // (que esta entero en la papelera: se envio en cascada).
   const archivos =
     Modelo === Archivo
       ? [recurso]
@@ -322,7 +263,7 @@ export async function eliminarDefinitivamente(tipo, id, usuario) {
     );
   }
 
-  // Computed Pattern: ahora SI se libera el espacio (regla 5.4).
+  // Ahora si se libera el espacio.
   const liberados = archivos.reduce((suma, a) => suma + a.tamano, 0);
   if (liberados) await Usuario.updateOne({ _id: recurso.propietarioId }, { $inc: { almacenamientoUsado: -liberados } });
 

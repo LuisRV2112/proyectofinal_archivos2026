@@ -13,11 +13,7 @@ import { Documentos, FiltrosBusqueda } from '../../servicios/documentos';
 
 const LIMITE = 20;
 
-/**
- * Busqueda de archivos con los filtros de la Fase 4 (GET /api/archivos/buscar).
- * Busca entre todo lo que el usuario puede leer: lo propio, lo compartido con
- * el y lo que hay dentro de carpetas compartidas (el alcance lo pone la API).
- */
+// La API limita la busqueda a lo que el usuario puede leer.
 @Component({
   selector: 'app-buscar',
   imports: [FormsModule, RouterLink, DatePipe, BytesPipe, SelectorCarpeta, VistaPrevia],

@@ -8,13 +8,8 @@ import { BytesPipe, formatearBytes } from '../../nucleo/formato';
 import { ElementoPapelera, Papelera } from '../../nucleo/modelos';
 import { PapeleraApi } from '../../servicios/papelera';
 
-/**
- * Papelera del usuario. Lo que esta aqui NO se borro: solo tiene
- * `eliminado.estado = true` (estado EMBEBIDO en el recurso) y por eso
- * desaparece de los listados. Restaurar lo devuelve a su carpeta original;
- * eliminar definitivamente borra documento y contenido en GridFS y libera
- * espacio. Mientras este aqui, sigue ocupando espacio (regla 5.4).
- */
+// Lo que esta aqui no se borro, solo tiene eliminado.estado = true y sigue
+// ocupando espacio. Eliminar definitivamente borra tambien el contenido en GridFS.
 @Component({
   selector: 'app-papelera',
   imports: [DatePipe, BytesPipe, Confirmacion],
@@ -33,7 +28,7 @@ export class PapeleraPagina implements OnInit {
   readonly papelera = signal<Papelera | null>(null);
   readonly cargando = signal(true);
   readonly error = signal<string | null>(null);
-  /** Elemento en proceso de restaurarse (deshabilita su fila). */
+  // Deshabilita la fila mientras se restaura.
   readonly restaurando = signal<string | null>(null);
   readonly aEliminar = signal<ElementoPapelera | null>(null);
   readonly eliminando = signal(false);
@@ -61,8 +56,7 @@ export class PapeleraPagina implements OnInit {
     this.api.restaurar(elemento).subscribe({
       next: (r) => {
         this.restaurando.set(null);
-        // Los avisos de la API explican si volvio a la raiz (su carpeta ya no
-        // existe) o si se renombro por un choque de nombres.
+        // La API avisa si volvio a la raiz o si se renombro.
         const texto = `"${r.nombre}" restaurado en ${r.ubicacion}.`;
         if (r.avisos.length) this.avisos.info(`${texto} ${r.avisos.join(' ')}`);
         else this.avisos.exito(texto);
@@ -98,7 +92,7 @@ export class PapeleraPagina implements OnInit {
         this.eliminando.set(false);
         this.aEliminar.set(null);
         this.avisos.exito(`"${elemento.nombre}" eliminado definitivamente. Se liberaron ${formatearBytes(r.bytesLiberados)}.`);
-        // Se desconto de almacenamientoUsado: se refresca el dato del menu.
+        // Actualiza el espacio usado en el menu.
         this.autenticacion.refrescarPerfil();
         this.cargar();
       },

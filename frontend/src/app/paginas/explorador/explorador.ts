@@ -16,10 +16,9 @@ import { BytesPipe, formatearBytes } from '../../nucleo/formato';
 import { Archivo, Carpeta, ContenidoCarpeta } from '../../nucleo/modelos';
 import { Documentos } from '../../servicios/documentos';
 
-/** Una fila del listado: carpeta o archivo. */
 type Elemento = { tipo: 'carpeta'; dato: Carpeta } | { tipo: 'archivo'; dato: Archivo };
 
-/** Dialogo abierto en este momento (como mucho uno). */
+// Solo hay un dialogo abierto a la vez.
 type Dialogo =
   | { tipo: 'crear' }
   | { tipo: 'nuevoArchivo' }
@@ -37,8 +36,7 @@ interface Subida {
   mensaje?: string;
 }
 
-// Las mismas reglas que valida el backend (middleware/subida.js). Se revisan
-// tambien aqui solo para avisar al instante, sin esperar el viaje a la API.
+// El backend tambien lo valida; aqui es para avisar antes de subir.
 const EXTENSIONES = ['txt', 'md'];
 const TAMANO_MAXIMO = 5 * 1024 * 1024;
 
@@ -54,7 +52,7 @@ export class Explorador {
   private readonly avisos = inject(Avisos);
   private readonly router = inject(Router);
 
-  /** :id de la ruta /explorador/:id (sin id = la raiz del usuario). */
+  // Sin id = raiz
   readonly id = input<string>();
 
   readonly contenido = signal<ContenidoCarpeta | null>(null);
@@ -75,20 +73,16 @@ export class Explorador {
     ];
   });
 
-  // Que se puede hacer aqui depende del acceso a ESTA carpeta (regla 5.2):
-  // crear, subir, mover y eliminar son del propietario (el arbol de cada
-  // usuario es solo suyo); renombrar basta con EDICION. La API lo vuelve a
-  // comprobar en cada operacion; esto solo evita ofrecer botones que fallarian.
+  // Solo para mostrar u ocultar botones; la API valida igual.
+  // Crear, subir, mover y eliminar: propietario. Renombrar: EDICION.
   readonly esPropio = computed(() => this.contenido()?.acceso.nivel === 'PROPIETARIO');
   readonly puedeEditar = computed(() => ['PROPIETARIO', 'EDICION'].includes(this.contenido()?.acceso.nivel ?? ''));
-  /** Entro por una carpeta compartida: la raiz "propia" no es la de este arbol. */
   readonly esCompartida = computed(() => !!this.contenido()?.carpeta && !this.esPropio());
 
   private contadorSubidas = 0;
 
   constructor() {
-    // Se recarga cada vez que cambia el :id (entrar a otra carpeta reutiliza
-    // el mismo componente).
+    // Recarga al cambiar el :id; el componente se reutiliza.
     effect(() => this.cargar(this.id() ?? null));
   }
 
@@ -108,7 +102,7 @@ export class Explorador {
     });
   }
 
-  // --- Navegacion ---
+  // Navegacion
 
   abrir(elemento: Elemento) {
     if (elemento.tipo === 'carpeta') this.router.navigate(['/explorador', elemento.dato._id]);
@@ -118,15 +112,14 @@ export class Explorador {
   subirNivel() {
     const c = this.contenido();
     if (!c?.carpeta) return;
-    // Las migas ya vienen recortadas a lo que el usuario puede ver: si entro
-    // por una carpeta compartida, por encima de ella no hay nada accesible.
+    // Las migas ya vienen recortadas a lo que puede ver.
     const migas = c.migas;
     if (migas.length > 1) this.router.navigate(['/explorador', migas[migas.length - 2]._id]);
     else if (this.esPropio()) this.router.navigate(['/explorador']);
     else this.router.navigate(['/compartidos/conmigo']);
   }
 
-  // --- Dialogos ---
+  // Dialogos
 
   abrirDialogo(dialogo: Dialogo) {
     this.errorDialogo.set(null);
@@ -178,11 +171,7 @@ export class Explorador {
       : `"${elemento.dato.nombre}" irá a la papelera. Podrás restaurarlo desde ahí.`;
   }
 
-  /**
-   * Corre una operacion de un dialogo. Si la API la rechaza (nombre
-   * duplicado, ciclo al mover, sin permiso...), el dialogo queda abierto con
-   * el mensaje de la API para corregir y reintentar.
-   */
+  // Si la API rechaza la operacion, el dialogo queda abierto con el error.
   private ejecutar(operacion: Observable<unknown>, exito: string) {
     this.ocupado.set(true);
     this.errorDialogo.set(null);
@@ -192,7 +181,7 @@ export class Explorador {
         this.dialogo.set(null);
         this.avisos.exito(exito);
         this.cargar();
-        // Crear un archivo ocupa espacio: se refresca el medidor del menu.
+        // Actualiza el espacio usado en el menu.
         this.autenticacion.refrescarPerfil();
       },
       error: (e) => {
@@ -207,7 +196,7 @@ export class Explorador {
     this.documentos.descargar(archivo).subscribe({ error: (e) => this.avisos.error(mensajeDeError(e)) });
   }
 
-  // --- Subida (boton o arrastrar y soltar) ---
+  // Subida (boton o arrastrar y soltar)
 
   alElegirArchivos(evento: Event) {
     const campo = evento.target as HTMLInputElement;
@@ -253,8 +242,7 @@ export class Explorador {
           } else if (evento.type === HttpEventType.Response) {
             this.actualizarSubida(subida.id, { estado: 'listo', progreso: 100 });
             this.cargar();
-            // El backend sumo el tamano a almacenamientoUsado ($inc): se
-            // refresca el dato del menu lateral.
+            // Actualiza el espacio usado en el menu.
             this.autenticacion.refrescarPerfil();
           }
         },

@@ -2,10 +2,7 @@ import { Router } from 'express';
 import { autenticar } from '../middleware/autenticacion.js';
 import { listarActividad } from '../servicios/actividad.js';
 
-/**
- * Historial de actividad. Abierto a cualquier usuario autenticado: el
- * servicio limita a un usuario normal a su propio historial (seccion 6).
- */
+// El servicio limita al usuario normal a su propio historial.
 const router = Router();
 
 router.use(autenticar);

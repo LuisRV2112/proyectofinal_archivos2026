@@ -14,7 +14,7 @@ router.get('/por-mi', async (req, res) => {
   res.json(await compartidoPorMi(req.usuario));
 });
 
-// Para el selector de "compartir con..." del frontend.
+// Selector de "compartir con".
 router.get('/usuarios', async (req, res) => {
   res.json(await listarDestinatarios(req.usuario));
 });

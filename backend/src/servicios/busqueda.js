@@ -6,34 +6,14 @@ import { carpetasCompartidasCon, exigirNivel } from './permisos.js';
 
 const PARAMETROS = ['texto', 'extension', 'carpetaId', 'enSubarbol', 'desde', 'hasta', 'propietarioId', 'pagina', 'limite'];
 
-/**
- * GET /api/archivos/buscar — filtros combinables (todos opcionales):
- *
- *   texto          palabras en el nombre o en las etiquetas (indice de texto)
- *   extension      txt | md
- *   carpetaId      solo los archivos directos de esa carpeta...
- *   enSubarbol     ...o, con true, tambien los de todas sus subcarpetas
- *   desde, hasta   rango sobre creadoEn
- *   propietarioId  solo los de ese propietario (dentro de lo accesible)
- *   pagina, limite paginacion
- *
- * Cada filtro se traduce a una condicion sobre un campo indexado, y MongoDB
- * combina las condiciones con AND.
- */
+// GET /api/archivos/buscar. Todos los filtros son opcionales y se combinan con AND.
 export async function buscarArchivos(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, PARAMETROS);
 
-  // Siempre: nada de la papelera.
   const filtro = { 'eliminado.estado': false };
 
-  // Alcance segun permisos: un usuario busca entre lo que puede LEER, que es
-  // la union de las vias de acceso de la regla 5.2:
-  //   - lo suyo                                  {propietarioId: yo}
-  //   - lo compartido directamente con el        {"compartidoCon.usuarioId": yo}
-  //   - lo que esta dentro de una carpeta que le
-  //     compartieron (herencia)                  {ancestros: {$in: [esas carpetas]}}
-  // Las tres ramas del $or usan un indice cada una, requisito de MongoDB para
-  // combinar $or con una busqueda $text. El administrador busca entre todo.
+  // Lo que puede leer: lo suyo, lo compartido directo y lo heredado.
+  // Cada rama del $or tiene indice, MongoDB lo exige para usarlo con $text.
   if (usuario.rol !== 'ADMINISTRADOR') {
     const compartidas = await carpetasCompartidasCon(usuario);
     filtro.$or = [
@@ -44,10 +24,7 @@ export async function buscarArchivos(consulta, usuario) {
   }
   if (consulta.propietarioId !== undefined) filtro.propietarioId = exigirObjectId(consulta.propietarioId, 'propietarioId');
 
-  // Busqueda por texto con el indice {nombre: "text", etiquetas: "text"} en
-  // espanol: busca PALABRAS completas (con raices: "contratos" encuentra
-  // "contrato"), no fragmentos. Los guiones y puntos del nombre separan
-  // palabras, asi que "acta" encuentra "acta-comite-legal.txt".
+  // Busca palabras completas, no fragmentos. Los guiones separan palabras.
   if (consulta.texto !== undefined) {
     const texto = String(consulta.texto).trim();
     if (!texto) throw new ErrorValidacion('El parámetro "texto" no puede estar vacío');
@@ -68,10 +45,7 @@ export async function buscarArchivos(consulta, usuario) {
     if (!carpeta) throw new ErrorNoEncontrado('Carpeta no encontrada', 'No existe o está en la papelera');
     await exigirNivel(carpeta, usuario, 'LECTURA');
 
-    // Aqui se ve la ventaja de Array of Ancestors: "todo lo que esta debajo
-    // de X, a cualquier profundidad" es una igualdad sobre un array
-    // indexado ({ancestros: X}), sin recorrer el arbol. Funciona porque el
-    // `ancestros` de un archivo incluye su propia carpeta.
+    // Todo el subarbol con {ancestros: X}, sin recorrer el arbol.
     if (enSubarbol) filtro.ancestros = carpeta._id;
     else filtro.carpetaId = carpeta._id;
   } else if (enSubarbol) {
@@ -83,8 +57,7 @@ export async function buscarArchivos(consulta, usuario) {
 
   const { pagina, limite } = leerPaginacion(consulta);
 
-  // Con texto, primero lo mas relevante (puntaje del indice de texto); sin
-  // texto, lo mas reciente (indice {creadoEn: -1}).
+  // Con texto por relevancia, sin texto por fecha.
   const proyeccion = filtro.$text ? { gridfsId: 0, relevancia: { $meta: 'textScore' } } : { gridfsId: 0 };
   const orden = filtro.$text ? { relevancia: { $meta: 'textScore' }, creadoEn: -1 } : { creadoEn: -1 };
 
@@ -97,8 +70,7 @@ export async function buscarArchivos(consulta, usuario) {
       .lean(),
   ]);
 
-  // La ubicacion legible de cada resultado: una sola consulta por las
-  // carpetas distintas de la pagina, no una por archivo.
+  // Una consulta para las carpetas de la pagina, no una por archivo.
   const idsCarpetas = [...new Set(resultados.filter((a) => a.carpetaId).map((a) => String(a.carpetaId)))];
   const carpetas = await Carpeta.find({ _id: { $in: idsCarpetas } }, { ruta: 1 }).lean();
   const rutas = new Map(carpetas.map((c) => [String(c._id), c.ruta]));

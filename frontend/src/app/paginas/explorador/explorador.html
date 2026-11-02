@@ -155,7 +155,7 @@
     <app-confirmacion titulo="¿Enviar a la papelera?" [mensaje]="mensajeEliminar(d.elemento)" textoBoton="Enviar a la papelera"
       [ocupado]="ocupado()" [error]="errorDialogo()" (aceptar)="eliminar(d.elemento)" (cancelar)="cerrarDialogo()" />
   } @else if (d.tipo === 'compartir') {
-    <!-- Al cerrar se recarga: el contador "Compartido · N" sale del array embebido. -->
+    <!-- Se recarga al cerrar para actualizar el contador de compartidos. -->
     <app-dialogo-compartir [recurso]="{ tipo: d.elemento.tipo, _id: d.elemento.dato._id, nombre: d.elemento.dato.nombre }"
       (cerrar)="cerrarDialogo(); cargar()" />
   } @else if (d.tipo === 'previa') {

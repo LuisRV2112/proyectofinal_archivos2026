@@ -4,14 +4,9 @@ import { exigirObjectId, exigirObjeto, rechazarCamposDesconocidos } from '../uti
 import { registrarActividad } from './actividad.js';
 import { esPropietario } from './permisos.js';
 
-/**
- * Comparticion de recursos. Los permisos viven EMBEBIDOS en el propio
- * recurso (`compartidoCon`), asi que compartir, cambiar el nivel y revocar
- * son actualizaciones de un solo documento: atomicas por naturaleza en
- * MongoDB, sin transacciones ni una coleccion intermedia.
- */
+// Como los permisos estan embebidos, compartir y revocar modifican un solo
+// documento: son atomicos sin transacciones.
 
-// La URL acepta /archivos/:id o /carpetas/:id (y el singular).
 const TIPOS = {
   archivo: { Modelo: Archivo, recursoTipo: 'ARCHIVO', articulo: 'El archivo' },
   carpeta: { Modelo: Carpeta, recursoTipo: 'CARPETA', articulo: 'La carpeta' },
@@ -31,11 +26,7 @@ function leerNivel(nivel) {
   return nivel;
 }
 
-/**
- * Recurso activo sobre el que `usuario` puede gestionar permisos: solo el
- * PROPIETARIO o un ADMINISTRADOR. Tener EDICION no basta: decidir quien ve un
- * recurso es del dueno, si no, cualquiera con acceso podria re-compartirlo.
- */
+// Solo el propietario o el administrador; con EDICION no basta.
 async function recursoGestionable(tipo, id, usuario) {
   const { Modelo, recursoTipo, articulo } = leerTipo(tipo);
   const recurso = await Modelo.findOne({ _id: exigirObjectId(id, 'id del recurso'), 'eliminado.estado': false });
@@ -46,7 +37,6 @@ async function recursoGestionable(tipo, id, usuario) {
   return { Modelo, recursoTipo, recurso };
 }
 
-/** Destinatario valido: existe, esta activo, no es quien comparte ni el dueno. */
 async function leerDestinatario(usuarioId, recurso, actor) {
   const id = exigirObjectId(usuarioId, 'usuarioId');
   if (id.equals(actor._id)) throw new ErrorValidacion('No puedes compartir un recurso contigo mismo');
@@ -59,10 +49,7 @@ async function leerDestinatario(usuarioId, recurso, actor) {
   return destinatario;
 }
 
-/**
- * GET /api/recursos/:tipo/:id/compartir — con quien esta compartido, con los
- * datos de cada usuario (populate sobre la referencia usuarioId).
- */
+// GET /api/recursos/:tipo/:id/compartir
 export async function listarPermisos(tipo, id, usuario) {
   const { recurso, Modelo } = await recursoGestionable(tipo, id, usuario);
   const conUsuarios = await Modelo.findById(recurso._id, { nombre: 1, compartidoCon: 1 })
@@ -71,16 +58,9 @@ export async function listarPermisos(tipo, id, usuario) {
   return { recursoId: recurso._id, nombre: recurso.nombre, compartidoCon: conUsuarios.compartidoCon };
 }
 
-/**
- * POST /api/recursos/:tipo/:id/compartir — { usuarioId, nivel }
- *
- * Compartir dos veces con el mismo usuario ACTUALIZA el nivel, no duplica la
- * entrada. Se hace con dos actualizaciones condicionales en vez de "leer,
- * modificar el array y guardar", porque asi dos peticiones simultaneas no
- * pueden dejar al usuario repetido en el array:
- *   1. $push solo si el usuario NO esta todavia en compartidoCon
- *   2. si no se agrego, ya estaba: $set del nivel con el operador posicional $
- */
+// POST /api/recursos/:tipo/:id/compartir
+// $push solo si el usuario no esta; si ya estaba se cambia el nivel. Asi dos
+// peticiones a la vez no lo duplican.
 export async function compartir(tipo, id, cuerpo, actor) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['usuarioId', 'nivel']);
@@ -106,7 +86,6 @@ export async function compartir(tipo, id, cuerpo, actor) {
     return { creado: true, permiso };
   }
 
-  // Ya estaba compartido con el: se trata como un cambio de nivel.
   return { creado: false, ...(await cambiarNivelInterno(Modelo, recursoTipo, recurso, destinatario, nivel, actor)) };
 }
 
@@ -115,9 +94,7 @@ async function cambiarNivelInterno(Modelo, recursoTipo, recurso, destinatario, n
   if (!anterior) throw new ErrorNoEncontrado(`El recurso no está compartido con ${destinatario.username}`);
   if (anterior.nivel === nivel) return { permiso: anterior, sinCambios: true };
 
-  // `$` apunta al elemento del array que cumplio 'compartidoCon.usuarioId'.
-  // otorgadoPor/otorgadoEn se actualizan: registran quien fijo el nivel
-  // vigente y cuando.
+  // $ es el elemento que coincidio con el filtro.
   const ahora = new Date();
   await Modelo.updateOne(
     { _id: recurso._id, 'compartidoCon.usuarioId': destinatario._id },
@@ -140,7 +117,7 @@ async function cambiarNivelInterno(Modelo, recursoTipo, recurso, destinatario, n
   return { permiso: { usuarioId: destinatario._id, nivel, otorgadoPor: actor._id, otorgadoEn: ahora } };
 }
 
-/** PATCH /api/recursos/:tipo/:id/compartir/:usuarioId — { nivel } */
+// PATCH /api/recursos/:tipo/:id/compartir/:usuarioId
 export async function cambiarNivel(tipo, id, usuarioId, cuerpo, actor) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['nivel']);
@@ -151,13 +128,9 @@ export async function cambiarNivel(tipo, id, usuarioId, cuerpo, actor) {
   return cambiarNivelInterno(Modelo, recursoTipo, recurso, destinatario, nivel, actor);
 }
 
-/**
- * DELETE /api/recursos/:tipo/:id/compartir/:usuarioId — revocar.
- *
- * $pull quita la entrada del array. Al revocar el permiso de una carpeta, el
- * usuario pierde tambien el acceso heredado a todo su contenido, sin tocar
- * ningun otro documento: la herencia se calcula al consultar, no se copia.
- */
+// DELETE /api/recursos/:tipo/:id/compartir/:usuarioId
+// La herencia no se copia, asi que revocar la carpeta quita el acceso a
+// todo su contenido.
 export async function revocar(tipo, id, usuarioId, actor) {
   const { Modelo, recursoTipo, recurso } = await recursoGestionable(tipo, id, actor);
   const idDestinatario = exigirObjectId(usuarioId, 'usuarioId');
@@ -166,7 +139,6 @@ export async function revocar(tipo, id, usuarioId, actor) {
 
   await Modelo.updateOne({ _id: recurso._id }, { $pull: { compartidoCon: { usuarioId: idDestinatario } } });
 
-  // El usuario puede haberse desactivado; el username es solo para el detalle.
   const destinatario = await Usuario.findById(idDestinatario, { username: 1 });
   await registrarActividad({
     usuarioId: actor._id,
@@ -179,14 +151,8 @@ export async function revocar(tipo, id, usuarioId, actor) {
   return { revocado: true };
 }
 
-/**
- * GET /api/compartidos/conmigo — lo que OTROS compartieron DIRECTAMENTE con el
- * usuario, con su nivel y el propietario. Lo que hay dentro de una carpeta
- * compartida no se repite aqui: se alcanza navegando la carpeta (herencia).
- *
- * Una consulta por coleccion sobre el indice multiclave
- * {"compartidoCon.usuarioId": 1}.
- */
+// GET /api/compartidos/conmigo. Solo lo compartido directo; el contenido
+// de las carpetas se ve navegando.
 export async function compartidoConmigo(usuario) {
   const filtro = { 'compartidoCon.usuarioId': usuario._id, 'eliminado.estado': false };
   const [carpetas, archivos] = await Promise.all([
@@ -194,8 +160,7 @@ export async function compartidoConmigo(usuario) {
     Archivo.find(filtro, { gridfsId: 0 }).populate('propietarioId', CAMPOS_USUARIO).lean(),
   ]);
 
-  // De todo el array compartidoCon, al usuario solo le importa (y solo debe
-  // ver) su propia entrada: no se le muestra con quien mas esta compartido.
+  // Solo se le muestra su propio permiso.
   const resumir = (recurso, tipo) => {
     const { compartidoCon, propietarioId, __v, ...resto } = recurso;
     const mio = compartidoCon.find((p) => p.usuarioId.equals(usuario._id));
@@ -206,10 +171,7 @@ export async function compartidoConmigo(usuario) {
   );
 }
 
-/**
- * GET /api/compartidos/por-mi — recursos propios con al menos un permiso.
- * `compartidoCon.0` existe solo si el array no esta vacio.
- */
+// GET /api/compartidos/por-mi. compartidoCon.0 existe si el array no esta vacio.
 export async function compartidoPorMi(usuario) {
   const filtro = { propietarioId: usuario._id, 'compartidoCon.0': { $exists: true }, 'eliminado.estado': false };
   const [carpetas, archivos] = await Promise.all([
@@ -220,11 +182,7 @@ export async function compartidoPorMi(usuario) {
   return [...carpetas.map(marcar('CARPETA')), ...archivos.map(marcar('ARCHIVO'))];
 }
 
-/**
- * GET /api/compartidos/usuarios — con quien se puede compartir: los usuarios
- * activos salvo uno mismo. Solo datos de identificacion (/api/usuarios, con
- * todos los datos, es exclusivo del administrador).
- */
+// GET /api/compartidos/usuarios. Usuarios activos, solo nombre y username.
 export async function listarDestinatarios(usuario) {
   return Usuario.find({ activo: true, _id: { $ne: usuario._id } }, CAMPOS_USUARIO).sort({ username: 1 }).lean();
 }

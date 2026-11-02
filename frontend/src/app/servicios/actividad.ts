@@ -14,14 +14,10 @@ export interface FiltrosActividad {
   limite: number;
 }
 
-/** Entrada del historial con quien la hizo (null: LOGIN_FALLIDO de un username inexistente). */
+// usuario es null en un LOGIN_FALLIDO de un username que no existe.
 export type EntradaConUsuario = EntradaActividad & { usuario: UsuarioResumen | null };
 
-/**
- * Historial (GET /api/actividad). El mismo endpoint sirve para "mi actividad"
- * y para el historial global: la API impone el usuarioId del que pregunta si
- * no es administrador, asi que el frontend no puede ver de mas aunque quiera.
- */
+// Si no es administrador, la API solo devuelve su propio historial.
 @Injectable({ providedIn: 'root' })
 export class ActividadApi {
   private readonly http = inject(HttpClient);

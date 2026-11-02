@@ -1,10 +1,5 @@
-/**
- * Verificacion de la carga inicial: `npm run seed:verificar`.
- *
- * Comprueba, contra lo que de verdad quedo en MongoDB, cada regla de
- * consistencia de la seccion 8 del modelo. No confia en el seed: recalcula
- * todo desde la base. Termina con codigo de salida 1 si algo falla.
- */
+// npm run seed:verificar. Revisa la consistencia de la carga inicial
+// directamente en la base. Sale con codigo 1 si algo falla.
 import 'dotenv/config';
 import mongoose from 'mongoose';
 import { conectarBaseDatos, desconectarBaseDatos } from '../config/baseDatos.js';
@@ -50,7 +45,7 @@ async function principal() {
   comprobar('No hay contenidos huerfanos en GridFS', contenidos.filter((g) => !archivos.some((a) => a.gridfsId.equals(g._id))).map((g) => g.filename));
   comprobar('El filename de GridFS es el nombre actual del archivo', archivos.filter((a) => contenidoPorId.get(String(a.gridfsId))?.filename !== a.nombre).map((a) => a.nombre));
 
-  // Descarga real desde GridFS y comparacion byte a byte con el texto original.
+  // Comparar byte a byte lo descargado con el original.
   const especificaciones = new Map(ARCHIVOS.map((a) => [a.nombre, a]));
   const distintos = [];
   let bytesMultibyte = 0;

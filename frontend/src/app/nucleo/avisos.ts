@@ -5,11 +5,7 @@ export interface Aviso {
   texto: string;
 }
 
-/**
- * Mensajes breves que se muestran sobre cualquier pantalla (el layout los
- * dibuja). Asi un guard o un servicio pueden avisar algo sin depender de la
- * pantalla en que se este.
- */
+// Mensajes emergentes; los dibuja el layout.
 @Injectable({ providedIn: 'root' })
 export class Avisos {
   readonly actual = signal<Aviso | null>(null);

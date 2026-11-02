@@ -17,9 +17,7 @@ interface GrupoMenu {
   opciones: OpcionMenu[];
 }
 
-// El menu se arma desde estos datos y se filtra por rol: el usuario normal no
-// ve las opciones de administracion. Ocultarlas es comodidad; el bloqueo real
-// lo hacen el guard (pantalla) y la API (datos).
+// Se filtra por rol. Ocultar opciones no es seguridad: eso lo hacen el guard y la API.
 const MENU: GrupoMenu[] = [
   {
     titulo: 'Documentos',

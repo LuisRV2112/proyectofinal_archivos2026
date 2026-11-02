@@ -5,8 +5,7 @@ import { formatearBytes } from '../utilidades/formato.js';
 import { exigirObjectId, exigirObjeto, exigirTexto, rechazarCamposDesconocidos } from '../utilidades/validacion.js';
 import { registrarActividad } from './actividad.js';
 
-// Mismo costo que el seed: unas decenas de ms por hash, suficiente para frenar
-// un ataque de fuerza bruta sin hacer lento el login.
+// Igual que el seed.
 const COSTO_BCRYPT = 10;
 const LONGITUD_MINIMA_PASSWORD = 8;
 
@@ -16,7 +15,6 @@ function validarPassword(password) {
   }
 }
 
-/** Cuota en bytes: entero entre 0 y CUOTA_MAXIMA. */
 function leerCuota(valor) {
   if (!Number.isInteger(valor) || valor < 0 || valor > CUOTA_MAXIMA) {
     throw new ErrorValidacion(
@@ -33,11 +31,7 @@ function validarRol(rol) {
   }
 }
 
-/**
- * Comprueba antes de guardar que username y email esten libres, para
- * responder 409 con un mensaje claro. El indice unico sigue siendo la garantia
- * real (ver middleware/errores.js) por si dos altas llegan a la vez.
- */
+// Para responder 409 con un mensaje claro; el indice unico es la garantia real.
 async function validarUnicidad({ username, email }, excluirId = null) {
   const filtroExcluir = excluirId ? { _id: { $ne: excluirId } } : {};
   if (username && (await Usuario.exists({ username, ...filtroExcluir }))) {
@@ -54,7 +48,6 @@ async function buscarUsuario(id) {
   return usuario;
 }
 
-/** Lista de usuarios, con filtros opcionales ?rol= y ?activo=. */
 export async function listarUsuarios(consulta = {}) {
   const filtro = {};
   if (consulta.rol !== undefined) {
@@ -67,7 +60,6 @@ export async function listarUsuarios(consulta = {}) {
     }
     filtro.activo = consulta.activo === 'true';
   }
-  // passwordHash no viaja: tiene select:false y ademas toJSON lo quita.
   return Usuario.find(filtro).sort({ username: 1 });
 }
 
@@ -84,9 +76,7 @@ export async function crearUsuario(cuerpo, admin) {
   const cuotaAlmacenamiento = cuerpo.cuotaAlmacenamiento === undefined ? CUOTA_POR_DEFECTO : leerCuota(cuerpo.cuotaAlmacenamiento);
   await validarUnicidad({ username, email });
 
-  // El resto de reglas de formato (longitud y caracteres del username,
-  // formato del correo) las aplica el esquema al guardar; si fallan, el
-  // middleware de errores las devuelve como 400.
+  // El formato lo valida el esquema.
   const nuevo = await Usuario.create({
     username,
     email,
@@ -107,11 +97,7 @@ export async function crearUsuario(cuerpo, admin) {
   return nuevo;
 }
 
-/**
- * Modifica datos de un usuario. El username no se cambia: es el
- * identificador de inicio de sesion y aparece en el historial.
- * `almacenamientoUsado` tampoco: lo calcula el servidor. La cuota si.
- */
+// El username no se cambia: es el login y aparece en el historial.
 export async function actualizarUsuario(id, cuerpo, admin) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['email', 'nombreCompleto', 'rol', 'password', 'cuotaAlmacenamiento']);
@@ -132,8 +118,7 @@ export async function actualizarUsuario(id, cuerpo, admin) {
   }
   if (cuerpo.rol !== undefined) {
     validarRol(cuerpo.rol);
-    // Un administrador no puede quitarse el rol a si mismo: podria dejar el
-    // sistema sin nadie capaz de gestionar usuarios.
+    // Para no quedar sin administradores.
     if (usuario._id.equals(admin._id) && cuerpo.rol !== 'ADMINISTRADOR') {
       throw new ErrorConflicto('No puedes quitarte el rol de administrador a ti mismo');
     }
@@ -142,8 +127,6 @@ export async function actualizarUsuario(id, cuerpo, admin) {
   }
   if (cuerpo.cuotaAlmacenamiento !== undefined) {
     const cuota = leerCuota(cuerpo.cuotaAlmacenamiento);
-    // Bajarla por debajo de lo que ya ocupa dejaria al usuario "excedido" sin
-    // forma de saber cuanto debe borrar: se rechaza y se dice cuanto usa.
     if (cuota < usuario.almacenamientoUsado) {
       throw new ErrorConflicto(
         'La cuota no puede ser menor que el espacio que el usuario ya ocupa',
@@ -173,15 +156,8 @@ export async function actualizarUsuario(id, cuerpo, admin) {
   return usuario;
 }
 
-/**
- * Activa o desactiva una cuenta.
- *
- * Desactivar NO borra nada: sus carpetas, archivos, permisos otorgados y su
- * historial quedan intactos (el historial es auditoria y los reportes deben
- * seguir contandolo). Solo impide iniciar sesion, y como el middleware de
- * autenticacion consulta `activo` en cada peticion, tambien invalida al
- * instante cualquier token que ya tuviera.
- */
+// Desactivar no borra nada, solo impide entrar. Como el middleware revisa
+// activo en cada peticion, su token deja de servir de inmediato.
 export async function cambiarEstadoUsuario(id, cuerpo, admin) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['activo']);
@@ -193,8 +169,7 @@ export async function cambiarEstadoUsuario(id, cuerpo, admin) {
   if (usuario._id.equals(admin._id) && !cuerpo.activo) {
     throw new ErrorConflicto('No puedes desactivar tu propia cuenta');
   }
-  // Idempotente: pedir el estado que ya tiene no es un error, pero tampoco
-  // es una operacion, asi que no se registra en el historial.
+  // Si ya tiene ese estado no se registra nada.
   if (usuario.activo === cuerpo.activo) return usuario;
 
   usuario.activo = cuerpo.activo;

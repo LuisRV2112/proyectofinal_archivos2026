@@ -12,14 +12,7 @@ export const NIVELES: { valor: Nivel; texto: string }[] = [
   { valor: 'EDICION', texto: 'Edición' },
 ];
 
-/**
- * Gestion de permisos de un recurso: con quien esta compartido, agregar a
- * alguien, cambiar su nivel o revocarlo. Solo lo abre el propietario (o un
- * administrador); la API lo exige igual.
- *
- * Compartir una CARPETA da acceso a todo su contenido (herencia hacia abajo,
- * regla 5.2): el dialogo lo recuerda para que no sorprenda.
- */
+// Compartir, cambiar nivel y revocar. Solo para el propietario o el administrador.
 @Component({
   selector: 'app-dialogo-compartir',
   imports: [FormsModule, DatePipe],
@@ -107,7 +100,7 @@ export class DialogoCompartir implements OnInit {
   private readonly avisos = inject(Avisos);
 
   readonly recurso = input.required<RecursoCompartible>();
-  /** Se emite tras cada cambio, para que la pantalla de origen se actualice. */
+  // Para que la pantalla de origen se actualice.
   readonly cambio = output<void>();
   readonly cerrar = output<void>();
 
@@ -121,7 +114,7 @@ export class DialogoCompartir implements OnInit {
   readonly error = signal<string | null>(null);
   readonly revocando = signal<string | null>(null);
 
-  /** En el selector, solo quienes aun no tienen acceso directo. */
+  // Solo quienes aun no tienen acceso directo.
   readonly disponibles = computed(() => {
     const conAcceso = new Set(this.permisos().map((p) => p.usuarioId._id));
     return this.usuarios().filter((u) => !conAcceso.has(u._id));

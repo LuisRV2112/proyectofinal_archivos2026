@@ -2,11 +2,7 @@ import mongoose from 'mongoose';
 
 const ESTADOS_CONEXION = ['desconectado', 'conectado', 'conectando', 'desconectando'];
 
-/**
- * Estado del servidor y de la conexion a MongoDB. Ademas del estado que
- * reporta Mongoose se hace un `ping` real, porque la conexion puede figurar
- * como abierta y aun asi no responder.
- */
+// Ping real porque la conexion puede figurar abierta y no responder.
 export async function obtenerSalud() {
   const conexion = mongoose.connection;
   let ping = false;

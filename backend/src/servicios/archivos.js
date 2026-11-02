@@ -17,17 +17,16 @@ import { describirAcceso, exigirNivel, exigirPropietario } from './permisos.js';
 const NO_ELIMINADO = { 'eliminado.estado': false };
 const MAXIMO_ETIQUETAS = 10;
 
-// Decodificador estricto: falla ante cualquier secuencia que no sea UTF-8.
+// fatal: falla si el contenido no es UTF-8.
 const decodificadorUtf8 = new TextDecoder('utf-8', { fatal: true });
 
-/** Un archivo que no esta en la papelera; si no, 404. */
 async function buscarArchivoActivo(id) {
   const archivo = await Archivo.findOne({ _id: exigirObjectId(id, 'id de archivo'), ...NO_ELIMINADO });
   if (!archivo) throw new ErrorNoEncontrado('Archivo no encontrado', 'No existe o está en la papelera');
   return archivo;
 }
 
-/** Carpeta destino propia y activa; null = raiz del usuario. */
+// null = raiz
 async function buscarCarpetaDestino(carpetaId, usuario) {
   if (carpetaId === undefined || carpetaId === null || carpetaId === '') return null;
   const carpeta = await Carpeta.findOne({ _id: exigirObjectId(String(carpetaId), 'carpetaId'), ...NO_ELIMINADO });
@@ -36,10 +35,6 @@ async function buscarCarpetaDestino(carpetaId, usuario) {
   return carpeta;
 }
 
-/**
- * Valida el nombre con las reglas del esquema (sin barras, longitud) y que
- * la extension sea .txt o .md. Devuelve {nombre, extension}.
- */
 function validarNombreArchivo(valor) {
   const nombre = typeof valor === 'string' ? valor.trim() : '';
   if (!nombre) throw new ErrorValidacion('El nombre del archivo es obligatorio');
@@ -52,11 +47,7 @@ function validarNombreArchivo(valor) {
   return { nombre, extension };
 }
 
-/**
- * Etiquetas desde un formulario multipart: "contrato, cliente" o el campo
- * repetido. Se normalizan (minusculas, sin repetir) para que el indice de
- * texto y los filtros no distingan "Contrato" de "contrato".
- */
+// "contrato, cliente" -> ['contrato', 'cliente'], en minusculas y sin repetir.
 function leerEtiquetas(valor) {
   if (valor === undefined || valor === '') return [];
   const lista = (Array.isArray(valor) ? valor : String(valor).split(','))
@@ -68,30 +59,17 @@ function leerEtiquetas(valor) {
   return unicas;
 }
 
-/** Metadatos para la API: sin `gridfsId`, que es un detalle interno. */
 function metadatos(archivo) {
   const objeto = archivo.toJSON();
   delete objeto.gridfsId;
   return objeto;
 }
 
-/**
- * POST /api/archivos — multipart con `archivo` y, opcionales, `carpetaId`,
- * `etiquetas` y `origen`.
- *
- * Sirve tanto para SUBIR un archivo del equipo como para CREAR uno escrito
- * en el editor de la aplicacion (`origen=editor`): el frontend arma el
- * archivo con el texto y lo envia igual. Un solo camino hacia GridFS hace que
- * las dos formas pasen por las mismas validaciones (extension, UTF-8, nombre
- * libre, cuota); `origen` solo cambia como queda descrito en el historial.
- *
- * Orden: primero el contenido a GridFS y despues el documento con su
- * gridfsId. Al reves, existiria un instante en que el documento apunta a un
- * contenido que todavia no esta, y un listado o descarga en ese momento
- * fallaria. Si el documento no se puede guardar, se BORRA el contenido recien
- * subido: si no, quedaria contenido huerfano en GridFS ocupando espacio, sin
- * ningun documento que lo muestre ni forma de eliminarlo desde la aplicacion.
- */
+// POST /api/archivos. Tambien lo usa el editor (origen=editor), asi ambos
+// pasan por las mismas validaciones.
+// Primero se sube a GridFS y luego se crea el documento, para que nunca
+// apunte a contenido que no existe. Si el documento falla, se borra el
+// contenido para no dejarlo huerfano.
 export async function subirArchivo(archivoRecibido, campos, usuario) {
   if (!archivoRecibido) {
     throw new ErrorValidacion('No se recibió ningún archivo', 'Envía el archivo en el campo "archivo" (multipart/form-data)');
@@ -103,28 +81,22 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
     throw new ErrorValidacion(`Origen no válido: ${origen}`, 'Valores aceptados: subida, editor');
   }
 
-  // La extension no garantiza que sea texto: un binario renombrado a .txt se
-  // detecta porque no es UTF-8 valido.
+  // Detecta binarios renombrados a .txt.
   try {
     decodificadorUtf8.decode(archivoRecibido.buffer);
   } catch {
     throw new ErrorValidacion('El archivo no es texto válido', 'El contenido debe estar codificado en UTF-8');
   }
 
-  // Todas las validaciones ANTES de escribir en GridFS, para no subir
-  // contenido que luego habria que borrar.
+  // Validar antes de escribir en GridFS.
   const carpeta = await buscarCarpetaDestino(campos?.carpetaId, usuario);
   await validarNombreLibre(Archivo, 'carpetaId', { propietarioId: usuario._id, padreId: carpeta?._id, nombre });
 
-  // El MIME sale de la extension, no de lo que declare el cliente.
+  // No se confia en el MIME que manda el cliente.
   const mimeType = MIME_POR_EXTENSION[extension];
 
-  // Cuota: se RESERVA el espacio antes de escribir en GridFS, con un $inc
-  // condicionado a que quepa. La comprobacion y la suma son una sola
-  // operacion atomica sobre el documento del usuario, asi que dos subidas
-  // simultaneas no pueden pasarse de la cuota entre las dos (con "leer,
-  // comparar y luego sumar" ambas verian espacio libre). Computed Pattern:
-  // el total se mantiene al dia sumando aqui, en vez de recalcularlo.
+  // Se reserva el espacio con un $inc condicionado: comprobar y sumar en una
+  // sola operacion atomica evita que dos subidas a la vez pasen la cuota.
   const bytes = archivoRecibido.buffer.length;
   const reserva = await Usuario.updateOne(
     { _id: usuario._id, $expr: { $lte: [{ $add: ['$almacenamientoUsado', bytes] }, '$cuotaAlmacenamiento'] } },
@@ -138,8 +110,7 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
         `de ${formatearBytes(actual.cuotaAlmacenamiento)}. Libera espacio vaciando la papelera.`
     );
   }
-  // Si algo falla de aqui en adelante, el espacio reservado se devuelve: si
-  // no, el usuario perderia cuota por un archivo que no existe.
+  // Si algo falla despues, se devuelve lo reservado.
   const liberarReserva = () =>
     Usuario.updateOne({ _id: usuario._id }, { $inc: { almacenamientoUsado: -bytes } }).catch((e) =>
       console.error(`[archivos] No se pudo devolver la reserva de ${bytes} bytes a ${usuario.username}: ${e.message}`)
@@ -162,11 +133,9 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
       nombre,
       extension,
       mimeType,
-      // Bytes que GridFS reporta haber guardado: coincide con contenido.files.
       tamano,
       propietarioId: usuario._id,
       carpetaId: carpeta?._id ?? null,
-      // Ancestros de la carpeta MAS la carpeta (ver modelo Archivo).
       ancestros: ubicacionDentroDe(carpeta, nombre).ancestros,
       gridfsId,
       etiquetas,
@@ -190,11 +159,7 @@ export async function subirArchivo(archivoRecibido, campos, usuario) {
   return metadatos(archivo);
 }
 
-/**
- * GET /api/archivos/:id — metadatos, con la ruta legible de su carpeta y el
- * nivel de acceso del usuario (el cliente lo usa para mostrar u ocultar
- * acciones como renombrar).
- */
+// GET /api/archivos/:id. El nivel de acceso le dice al cliente que acciones mostrar.
 export async function obtenerArchivo(id, usuario) {
   const archivo = await buscarArchivoActivo(id);
   const acceso = await exigirNivel(archivo, usuario, 'LECTURA');
@@ -202,25 +167,18 @@ export async function obtenerArchivo(id, usuario) {
   return { ...metadatos(archivo), ubicacion: carpeta?.ruta ?? '/', acceso };
 }
 
-/** Archivo legible por el usuario y con su contenido presente en GridFS. */
 async function archivoConContenido(id, usuario) {
   const archivo = await buscarArchivoActivo(id);
   const acceso = await exigirNivel(archivo, usuario, 'LECTURA');
   if (!(await existeContenido(archivo.gridfsId))) {
-    // No deberia pasar nunca: indica una inconsistencia entre la coleccion y
-    // GridFS. Se reporta como error del servidor, no del cliente.
+    // Inconsistencia con GridFS: es error del servidor.
     console.error(`[archivos] ${archivo._id} apunta a un contenido inexistente (${archivo.gridfsId})`);
     throw new ErrorApi(500, 'El contenido del archivo no está disponible');
   }
   return { archivo, acceso };
 }
 
-/**
- * GET /api/archivos/:id/descargar — devuelve el archivo y un stream de
- * GridFS. Se envia por stream (chunk a chunk) en lugar de leerlo entero en
- * memoria: el servidor no necesita tener el archivo completo para empezar a
- * responder.
- */
+// GET /api/archivos/:id/descargar. Se envia por stream, chunk a chunk.
 export async function prepararDescarga(id, usuario) {
   const { archivo, acceso } = await archivoConContenido(id, usuario);
   await registrarActividad({
@@ -229,35 +187,23 @@ export async function prepararDescarga(id, usuario) {
     recursoTipo: 'ARCHIVO',
     recursoId: archivo._id,
     recursoNombre: archivo.nombre,
-    // Queda registrado por que via accedio: auditable si luego se revoca.
     detalle: `Descargado ${describirAcceso(acceso)}`,
   });
   return { archivo, flujo: abrirDescarga(archivo.gridfsId) };
 }
 
-/**
- * GET /api/archivos/:id/contenido — el texto, para la vista previa.
- * No se registra como DESCARGAR: es solo mirar el archivo dentro de la
- * aplicacion, y contarlo inflaria el historial y los reportes de descargas.
- */
+// GET /api/archivos/:id/contenido. La vista previa no cuenta como DESCARGAR.
 export async function leerTexto(id, usuario) {
   const { archivo } = await archivoConContenido(id, usuario);
   return { archivo, texto: (await leerContenido(archivo.gridfsId)).toString('utf8') };
 }
 
-/**
- * PATCH /api/archivos/:id — { nombre }
- *
- * La extension no puede cambiar: renombrar no convierte un .md en .txt, y
- * cambiarla dejaria `extension` y `mimeType` contando otra cosa que el
- * contenido real (y alteraria los reportes por tipo).
- */
+// PATCH /api/archivos/:id. La extension no se puede cambiar.
 export async function renombrarArchivo(id, cuerpo, usuario) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['nombre']);
   const { nombre, extension } = validarNombreArchivo(cuerpo.nombre);
   const archivo = await buscarArchivoActivo(id);
-  // Renombrar lo puede hacer tambien quien tenga EDICION (directa o heredada).
   await exigirNivel(archivo, usuario, 'EDICION');
 
   if (extension !== archivo.extension) {
@@ -275,9 +221,7 @@ export async function renombrarArchivo(id, cuerpo, usuario) {
   archivo.nombre = nombre;
   await archivo.save();
 
-  // El filename de GridFS es solo informativo (la aplicacion siempre llega
-  // al contenido por gridfsId), asi que si este paso fallara el renombrado
-  // sigue siendo valido: se deja constancia y no se revierte.
+  // El filename de GridFS es informativo; si falla no se revierte.
   await renombrarContenido(archivo.gridfsId, nombre).catch((e) =>
     console.error(`[archivos] No se pudo renombrar en GridFS ${archivo.gridfsId}: ${e.message}`)
   );
@@ -293,13 +237,8 @@ export async function renombrarArchivo(id, cuerpo, usuario) {
   return metadatos(archivo);
 }
 
-/**
- * PATCH /api/archivos/:id/mover — { carpetaId } (null = a la raiz)
- *
- * A diferencia de una carpeta, un archivo no tiene descendientes: basta con
- * recalcular su `carpetaId` y su `ancestros` (los de la carpeta destino mas
- * la carpeta). El contenido en GridFS no se toca: mover es cambiar metadatos.
- */
+// PATCH /api/archivos/:id/mover. Solo cambian carpetaId y ancestros;
+// GridFS no se toca.
 export async function moverArchivo(id, cuerpo, usuario) {
   exigirObjeto(cuerpo);
   rechazarCamposDesconocidos(cuerpo, ['carpetaId']);
@@ -311,7 +250,6 @@ export async function moverArchivo(id, cuerpo, usuario) {
   exigirPropietario(archivo, usuario, 'mover este archivo');
   const destino = await buscarCarpetaDestino(cuerpo.carpetaId, usuario);
 
-  // Ya esta ahi: nada que hacer ni registrar.
   if (String(archivo.carpetaId ?? null) === String(destino?._id ?? null)) return metadatos(archivo);
 
   await validarNombreLibre(Archivo, 'carpetaId', {

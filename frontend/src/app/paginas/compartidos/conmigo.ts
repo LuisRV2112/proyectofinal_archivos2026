@@ -9,10 +9,7 @@ import { Archivo, CompartidoConmigo } from '../../nucleo/modelos';
 import { Comparticion } from '../../servicios/comparticion';
 import { Documentos } from '../../servicios/documentos';
 
-/**
- * Lo que otros compartieron directamente con el usuario. Una carpeta se abre
- * en el explorador, donde su contenido es accesible por herencia.
- */
+// Las carpetas se abren en el explorador; su contenido se hereda.
 @Component({
   selector: 'app-compartido-conmigo',
   imports: [RouterLink, DatePipe, BytesPipe, VistaPrevia],

@@ -5,23 +5,13 @@ import { rechazarCamposDesconocidos } from '../../utilidades/validacion.js';
 import { filtroActividad } from '../actividad.js';
 import { leerUsuarioObjetivo } from './comun.js';
 
-/**
- * Reportes de ACTIVIDAD (9 a 12), todos sobre la coleccion `actividad`.
- *
- * Que el historial sea una coleccion aparte (y no un array embebido en cada
- * usuario) es lo que hace posibles estos reportes: agrupar las operaciones
- * de TODOS los usuarios por accion o por periodo es un $group directo sobre
- * una sola coleccion, apoyado en los indices {accion: 1} y {fecha: -1}.
- *
- * El 9 lo usa cualquiera (su propio historial); el 10, 11 y 12 son del
- * administrador (historial global, seccion 6).
- */
+// Reportes de actividad (9 a 12). Como el historial es una coleccion
+// aparte, agrupar todos los usuarios es un $group directo.
+// El 9 es de cualquiera (el propio); 10, 11 y 12 solo del administrador.
 
 const USUARIOS = Usuario.collection.name;
 
-// Periodo (?periodo) -> unidad de $dateTrunc y formato de la etiqueta.
-// La semana se etiqueta como semana ISO (2026-W18), que empieza en lunes,
-// igual que el startOfWeek que se le pasa a $dateTrunc.
+// Formato de la etiqueta de cada periodo. Semana ISO, empieza en lunes.
 const PERIODOS = {
   day: '%Y-%m-%d',
   week: '%G-W%V',
@@ -38,10 +28,7 @@ function leerPeriodo(valor) {
   return periodo;
 }
 
-/**
- * Reporte 9 — Historial de actividad de un usuario dentro de un rango de fechas.
- * GET /api/reportes/actividad/historial?desde=&hasta=[&usuarioId=&accion=&pagina=&limite=]
- */
+// Reporte 9: historial de un usuario en un rango de fechas.
 export async function historialUsuario(consulta, usuario) {
   rechazarCamposDesconocidos(consulta, ['usuarioId', 'desde', 'hasta', 'accion', 'pagina', 'limite']);
   const objetivo = await leerUsuarioObjetivo(consulta, usuario, 'Solo puedes consultar tu propio historial');
@@ -49,23 +36,19 @@ export async function historialUsuario(consulta, usuario) {
   const { pagina, limite } = leerPaginacion(consulta);
 
   const [resultado] = await Actividad.aggregate([
-    // 1. Operaciones del usuario en el rango: igualdad en usuarioId y rango
-    //    en fecha, justo el orden del indice {usuarioId: 1, fecha: -1}.
+    // 1. Usa el indice {usuarioId, fecha}.
     { $match: { ...filtro, usuarioId: objetivo._id } },
-    // 2. Lo mas reciente primero (el mismo indice ya entrega este orden).
+    // 2. Mas recientes primero.
     { $sort: { fecha: -1, _id: -1 } },
-    // 3. Tres resultados sobre los MISMOS documentos en una sola pasada:
+    // 3. Resumen, total y pagina en una sola pasada.
     {
       $facet: {
-        // 3a. Resumen: cuantas veces hizo cada accion en el periodo.
         resumen: [
           { $group: { _id: '$accion', cantidad: { $sum: 1 }, ultima: { $max: '$fecha' } } },
           { $sort: { cantidad: -1, _id: 1 } },
           { $project: { _id: 0, accion: '$_id', cantidad: 1, ultima: 1 } },
         ],
-        // 3b. Total para la paginacion.
         total: [{ $count: 'n' }],
-        // 3c. La pagina pedida del detalle.
         filas: [
           { $skip: (pagina - 1) * limite },
           { $limit: limite },
@@ -73,7 +56,6 @@ export async function historialUsuario(consulta, usuario) {
         ],
       },
     },
-    // 4. {total: [{n: 37}]} -> {total: 37}
     { $set: { total: { $ifNull: [{ $first: '$total.n' }, 0] } } },
   ]);
 
@@ -89,21 +71,17 @@ export async function historialUsuario(consulta, usuario) {
   };
 }
 
-/**
- * Reporte 10 — Cantidad de operaciones agrupadas por tipo.
- * GET /api/reportes/actividad/por-tipo[?desde=&hasta=&recursoTipo=]
- */
+// Reporte 10: operaciones por tipo.
 export async function operacionesPorTipo(consulta) {
   rechazarCamposDesconocidos(consulta, ['desde', 'hasta', 'recursoTipo']);
   const filtro = filtroActividad(consulta);
 
   const filas = await Actividad.aggregate([
-    // 1. Rango y tipo de recurso, si se pidieron.
+    // 1. Filtros.
     { $match: filtro },
-    // 2. Primer agrupamiento: por accion Y tipo de recurso (RENOMBRAR y MOVER
-    //    aplican a archivos y a carpetas; el desglose muestra cuantas de cada).
+    // 2. Agrupar por accion y tipo de recurso.
     { $group: { _id: { accion: '$accion', recursoTipo: '$recursoTipo' }, cantidad: { $sum: 1 } } },
-    // 3. Segundo agrupamiento: por accion, juntando el desglose.
+    // 3. Agrupar por accion.
     {
       $group: {
         _id: '$_id.accion',
@@ -111,15 +89,13 @@ export async function operacionesPorTipo(consulta) {
         porRecurso: { $push: { recursoTipo: '$_id.recursoTipo', cantidad: '$cantidad' } },
       },
     },
-    // 4. Total general en cada fila (ventana sobre todos los grupos), para
-    //    calcular el porcentaje sin una segunda consulta.
+    // 4. Total general con una ventana, para el porcentaje.
     {
       $setWindowFields: {
         sortBy: { cantidad: -1 },
         output: { total: { $sum: '$cantidad', window: { documents: ['unbounded', 'unbounded'] } } },
       },
     },
-    // 5. Forma final con el porcentaje de cada accion.
     {
       $project: {
         _id: 0,
@@ -130,7 +106,7 @@ export async function operacionesPorTipo(consulta) {
         total: 1,
       },
     },
-    // 6. La accion mas frecuente primero.
+    // 5. Ordenar.
     { $sort: { cantidad: -1, accion: 1 } },
   ]);
 
@@ -142,30 +118,24 @@ export async function operacionesPorTipo(consulta) {
   };
 }
 
-/**
- * Reporte 11 — Cantidad de operaciones agrupadas por periodo.
- * GET /api/reportes/actividad/por-periodo?periodo=day|week|month|year[&desde=&hasta=&accion=]
- */
+// Reporte 11: operaciones por periodo (day, week, month o year).
 export async function operacionesPorPeriodo(consulta) {
   rechazarCamposDesconocidos(consulta, ['periodo', 'desde', 'hasta', 'accion']);
   const periodo = leerPeriodo(consulta.periodo);
   const filtro = filtroActividad(consulta);
 
   const filas = await Actividad.aggregate([
-    // 1. Rango y accion, si se pidieron.
+    // 1. Filtros.
     { $match: filtro },
-    // 2. Cada operacion se lleva al INICIO de su periodo. $dateTrunc recibe la
-    //    unidad del parametro y la zona horaria: sin ella, una operacion del
-    //    31 de mayo a las 19:00 en Guatemala (01:00 UTC del 1 de junio)
-    //    caeria en junio. Las semanas empiezan el lunes.
+    // 2. Inicio del periodo con $dateTrunc, en hora de Guatemala.
     {
       $set: {
         inicio: { $dateTrunc: { date: '$fecha', unit: periodo, timezone: ZONA_HORARIA, startOfWeek: 'monday' } },
       },
     },
-    // 3. Primer agrupamiento: por periodo Y accion, para el desglose.
+    // 3. Agrupar por periodo y accion.
     { $group: { _id: { inicio: '$inicio', accion: '$accion' }, cantidad: { $sum: 1 } } },
-    // 4. Segundo agrupamiento: por periodo.
+    // 4. Agrupar por periodo.
     {
       $group: {
         _id: '$_id.inicio',
@@ -173,14 +143,11 @@ export async function operacionesPorPeriodo(consulta) {
         porAccion: { $push: { accion: '$_id.accion', cantidad: '$cantidad' } },
       },
     },
-    // 5. Rellena los periodos sin actividad entre el primero y el ultimo:
-    //    sin esto, una serie de tiempo saltaria de marzo a mayo y un grafico
-    //    no mostraria el hueco de abril. $densify crea los documentos que
-    //    faltan solo con el _id (el inicio del periodo).
+    // 5. $densify rellena los periodos sin actividad.
     { $densify: { field: '_id', range: { step: 1, unit: periodo, bounds: 'full' } } },
-    // 6. Orden cronologico.
+    // 6. Ordenar por fecha.
     { $sort: { _id: 1 } },
-    // 7. Forma final: etiqueta legible en hora local y 0 en los rellenados.
+    // 7. Etiqueta y 0 en los rellenados.
     {
       $project: {
         _id: 0,
@@ -202,15 +169,8 @@ export async function operacionesPorPeriodo(consulta) {
   };
 }
 
-/**
- * Reporte 12 — Principales acciones realizadas dentro del sistema.
- * GET /api/reportes/actividad/principales[?limite=5&excluirSesion=true&desde=&hasta=]
- *
- * Se distingue del 10 en que es un ranking (top N) y dice QUIENES realizan
- * cada accion: cuantos usuarios distintos y los que mas la hacen.
- * ?excluirSesion=true deja fuera LOGIN y LOGIN_FALLIDO, que dominan el
- * historial (casi la mitad de las entradas) y no son trabajo con documentos.
- */
+// Reporte 12: principales acciones. A diferencia del 10 es un top N y
+// muestra quienes las hacen. excluirSesion quita LOGIN y LOGIN_FALLIDO.
 export async function principalesAcciones(consulta) {
   rechazarCamposDesconocidos(consulta, ['limite', 'excluirSesion', 'desde', 'hasta']);
   const limite = leerEntero(consulta.limite, 'limite', { minimo: 1, maximo: 50, defecto: 5 });
@@ -218,9 +178,9 @@ export async function principalesAcciones(consulta) {
   const filtro = filtroActividad(consulta);
 
   return Actividad.aggregate([
-    // 1. Rango y, si se pidio, sin las entradas de sesion.
+    // 1. Filtros.
     { $match: { ...filtro, ...(excluirSesion && { accion: { $nin: ['LOGIN', 'LOGIN_FALLIDO'] } }) } },
-    // 2. Primer agrupamiento: por accion Y usuario (cuantas hizo cada uno).
+    // 2. Agrupar por accion y usuario.
     {
       $group: {
         _id: { accion: '$accion', usuarioId: '$usuarioId' },
@@ -228,10 +188,7 @@ export async function principalesAcciones(consulta) {
         ultima: { $max: '$fecha' },
       },
     },
-    // 3. Segundo agrupamiento: por accion. Cada grupo del paso 2 es un
-    //    usuario distinto; $topN se queda con los 3 que mas la realizan.
-    //    El desempate por _id hace estable el orden entre consultas: sin el,
-    //    dos usuarios con la misma cantidad podian salir en cualquier orden.
+    // 3. Agrupar por accion; $topN guarda los 3 usuarios que mas la hacen.
     {
       $group: {
         _id: '$_id.accion',
@@ -243,18 +200,14 @@ export async function principalesAcciones(consulta) {
         },
       },
     },
-    // 4. Ranking y corte.
+    // 4. Top N.
     { $sort: { cantidad: -1, _id: 1 } },
     { $limit: limite },
-    // 5. Posicion en el ranking, igual que en el reporte 4: las filas YA
-    //    ordenadas van a un array y $unwind entrega el indice de cada una.
-    //    ($documentNumber volveria a ordenar solo por cantidad y podria
-    //    intercambiar dos acciones empatadas.)
+    // 5. Posicion, igual que en el reporte 4.
     { $group: { _id: null, filas: { $push: '$$ROOT' } } },
     { $unwind: { path: '$filas', includeArrayIndex: 'indice' } },
     { $replaceWith: { $mergeObjects: ['$filas', { posicion: { $add: ['$indice', 1] } }] } },
-    // 6. Nombres de los usuarios de quienesMas. Un LOGIN_FALLIDO de un
-    //    username inexistente tiene usuarioId null: queda con usuario null.
+    // 6. Nombres de los usuarios.
     {
       $lookup: {
         from: USUARIOS,
@@ -264,7 +217,7 @@ export async function principalesAcciones(consulta) {
         as: 'usuarios',
       },
     },
-    // 7. Forma final: cada entrada de quienesMas cruzada con su usuario.
+    // 7. Unir cada entrada con su usuario.
     {
       $project: {
         _id: 0,
@@ -287,7 +240,7 @@ export async function principalesAcciones(consulta) {
         },
       },
     },
-    // $lookup no garantiza conservar el orden: se reafirma.
+    // $lookup no garantiza el orden.
     { $sort: { posicion: 1 } },
   ]);
 }

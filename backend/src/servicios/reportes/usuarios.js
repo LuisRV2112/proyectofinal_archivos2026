@@ -2,29 +2,23 @@ import { Archivo, Carpeta, Usuario } from '../../modelos/index.js';
 import { leerBooleano, leerEntero } from '../../utilidades/consultas.js';
 import { rechazarCamposDesconocidos } from '../../utilidades/validacion.js';
 
-/**
- * Reportes de USUARIOS (4 y 5). Solo administrador.
- */
+// Reportes de usuarios (4 y 5). Solo administrador.
 
 const USUARIOS = Usuario.collection.name;
 const ARCHIVOS = Archivo.collection.name;
 
-// Datos del usuario que se muestran en los reportes (nunca el passwordHash).
 const DATOS_USUARIO = { username: 1, nombreCompleto: 1, rol: 1, activo: 1, almacenamientoUsado: 1 };
 
-/**
- * Reporte 4 — Top 10 usuarios con mayor cantidad de archivos almacenados.
- * GET /api/reportes/usuarios/top-archivos[?incluirPapelera=false&limite=10]
- */
+// Reporte 4: top usuarios por cantidad de archivos.
 export async function topUsuariosPorArchivos(consulta) {
   rechazarCamposDesconocidos(consulta, ['incluirPapelera', 'limite']);
   const incluirPapelera = leerBooleano(consulta.incluirPapelera, 'incluirPapelera', true);
   const limite = leerEntero(consulta.limite, 'limite', { minimo: 1, maximo: 100, defecto: 10 });
 
   return Archivo.aggregate([
-    // 1. Archivos almacenados (los de la papelera tambien ocupan espacio).
+    // 1. Con o sin papelera.
     { $match: incluirPapelera ? {} : { 'eliminado.estado': false } },
-    // 2. Un grupo por propietario: cuantos archivos, de que tipo y cuantos bytes.
+    // 2. Agrupar por propietario.
     {
       $group: {
         _id: '$propietarioId',
@@ -35,21 +29,18 @@ export async function topUsuariosPorArchivos(consulta) {
         bytes: { $sum: '$tamano' },
       },
     },
-    // 3. De mayor a menor cantidad; a igual cantidad, el que ocupa mas.
+    // 3. Ordenar; empate por bytes.
     { $sort: { archivos: -1, bytes: -1 } },
-    // 4. Solo los primeros N (10 por defecto).
+    // 4. Top N.
     { $limit: limite },
-    // 5. Posicion en el ranking: se juntan las filas YA ordenadas en un array
-    //    y al desarmarlo $unwind entrega el indice de cada una (0, 1, 2...).
-    //    ($documentNumber no sirve aqui: exige ordenar por un solo campo, y
-    //    este ranking desempata por bytes.)
+    // 5. Posicion: includeArrayIndex de $unwind. $documentNumber no sirve
+    //    porque exige ordenar por un solo campo.
     { $group: { _id: null, filas: { $push: '$$ROOT' } } },
     { $unwind: { path: '$filas', includeArrayIndex: 'indice' } },
     { $replaceWith: { $mergeObjects: ['$filas', { posicion: { $add: ['$indice', 1] } }] } },
     // 6. Datos del usuario.
     { $lookup: { from: USUARIOS, localField: '_id', foreignField: '_id', pipeline: [{ $project: DATOS_USUARIO }], as: 'usuario' } },
     { $unwind: '$usuario' },
-    // 7. Forma final.
     {
       $project: {
         _id: 0,
@@ -62,24 +53,18 @@ export async function topUsuariosPorArchivos(consulta) {
         porTipo: { md: '$md', txt: '$txt' },
         enPapelera: 1,
         bytes: 1,
-        // El valor denormalizado (Computed Pattern), para contrastar.
+        // Valor denormalizado, para comparar.
         almacenamientoUsado: '$usuario.almacenamientoUsado',
       },
     },
-    // $lookup no garantiza conservar el orden: se reafirma.
+    // $lookup no garantiza el orden.
     { $sort: { posicion: 1 } },
   ]);
 }
 
-/**
- * Etapas comunes para "recursos compartidos": de un recurso (carpeta o
- * archivo) activo con al menos un permiso, deja su dueno, su tipo y a quienes
- * se compartio. Se aplican igual sobre `carpetas` y, via $unionWith, sobre
- * `archivos`.
- */
+// Recursos activos con al menos un permiso; se usa en carpetas y archivos.
 function etapasRecursosCompartidos(tipo) {
   return [
-    // `compartidoCon.0` existe solo si el array tiene al menos un elemento.
     { $match: { 'eliminado.estado': false, 'compartidoCon.0': { $exists: true } } },
     {
       $project: {
@@ -92,24 +77,18 @@ function etapasRecursosCompartidos(tipo) {
   ];
 }
 
-/**
- * Reporte 5 — Usuarios con mayor cantidad de recursos compartidos.
- * GET /api/reportes/usuarios/mas-compartidos[?limite=10]
- *
- * "Recursos" son carpetas Y archivos: $unionWith junta ambas colecciones en
- * el mismo flujo de documentos, como un UNION ALL, y el resto del pipeline
- * los trata igual.
- */
+// Reporte 5: usuarios con mas recursos compartidos. $unionWith junta
+// carpetas y archivos (como UNION ALL).
 export async function usuariosConMasCompartidos(consulta) {
   rechazarCamposDesconocidos(consulta, ['limite']);
   const limite = leerEntero(consulta.limite, 'limite', { minimo: 1, maximo: 100, defecto: 10 });
 
   return Carpeta.aggregate([
-    // 1. Carpetas activas compartidas...
+    // 1. Carpetas compartidas.
     ...etapasRecursosCompartidos('CARPETA'),
-    // 2. ...mas los archivos activos compartidos, en el mismo flujo.
+    // 2. Mas archivos compartidos.
     { $unionWith: { coll: ARCHIVOS, pipeline: etapasRecursosCompartidos('ARCHIVO') } },
-    // 3. Un grupo por propietario.
+    // 3. Agrupar por propietario.
     {
       $group: {
         _id: '$propietarioId',
@@ -117,11 +96,10 @@ export async function usuariosConMasCompartidos(consulta) {
         carpetas: { $sum: { $cond: [{ $eq: ['$tipo', 'CARPETA'] }, 1, 0] } },
         archivos: { $sum: { $cond: [{ $eq: ['$tipo', 'ARCHIVO'] }, 1, 0] } },
         permisosOtorgados: { $sum: '$permisos' },
-        // Un array de destinatarios por recurso; se unen en el paso 4.
         destinatarios: { $push: '$destinatarios' },
       },
     },
-    // 4. Con cuantas personas DISTINTAS comparte: union de todos los arrays.
+    // 4. Destinatarios distintos.
     {
       $set: {
         usuariosDistintos: {
@@ -129,10 +107,10 @@ export async function usuariosConMasCompartidos(consulta) {
         },
       },
     },
-    // 5. Ranking y corte.
+    // 5. Top N.
     { $sort: { recursos: -1, permisosOtorgados: -1 } },
     { $limit: limite },
-    // 6. Datos del usuario y forma final.
+    // 6. Datos del usuario.
     { $lookup: { from: USUARIOS, localField: '_id', foreignField: '_id', pipeline: [{ $project: DATOS_USUARIO }], as: 'usuario' } },
     { $unwind: '$usuario' },
     {

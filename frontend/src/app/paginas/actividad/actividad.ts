@@ -10,17 +10,7 @@ import { UsuariosApi } from '../../servicios/usuarios';
 
 const LIMITE = 25;
 
-/**
- * Historial de actividad. La misma pantalla sirve para:
- * - /actividad: el historial PROPIO (cualquier usuario).
- * - /admin/actividad: el historial GLOBAL, con filtro por usuario (solo admin;
- *   la ruta trae `data: { global: true }`, que llega como input).
- *
- * El historial es una coleccion aparte (`actividad`) y no un array embebido en
- * el usuario: crece sin limite y se consulta por usuario, accion o fecha con
- * sus propios indices. `recursoNombre` esta denormalizado, por eso las filas
- * siguen siendo legibles aunque el recurso se haya eliminado definitivamente.
- */
+// /actividad muestra el historial propio y /admin/actividad el global.
 @Component({
   selector: 'app-actividad',
   imports: [FormsModule, DatePipe, AccionPipe],
@@ -40,7 +30,7 @@ export class ActividadPagina implements OnInit {
   private readonly usuariosApi = inject(UsuariosApi);
   private readonly sesion = inject(Autenticacion).sesion;
 
-  /** true en /admin/actividad (data de la ruta). */
+  // true en /admin/actividad
   readonly global = input(false);
 
   readonly acciones = ACCIONES;
@@ -72,8 +62,7 @@ export class ActividadPagina implements OnInit {
     this.error.set(null);
     this.api
       .listar({
-        // En "mi actividad" se pide explicitamente el propio: un administrador
-        // sin usuarioId recibiria el historial de todos.
+        // Sin usuarioId, el administrador recibiria el de todos.
         usuarioId: this.global() ? this.usuarioId() : this.sesion()?.id,
         accion: this.accion(),
         recursoTipo: this.recursoTipo(),
@@ -95,7 +84,7 @@ export class ActividadPagina implements OnInit {
       });
   }
 
-  /** Clic en el usuario de una fila: filtra el historial global por el. */
+  // Clic en un usuario de la tabla.
   filtrarPorUsuario(id: string) {
     this.usuarioId.set(id);
     this.buscar();

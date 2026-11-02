@@ -3,10 +3,7 @@ import { Component, input } from '@angular/core';
 import { BytesPipe } from '../../nucleo/formato';
 import { CompartidosPorUsuario, NuncaCompartidos, RecibidosPorUsuario, RecursosMasCompartidos } from '../../servicios/reportes';
 
-/**
- * Tablas de los reportes de COMPARTICION (6 a 8, y 13). Mezclan carpetas y
- * archivos: el backend une ambas colecciones con $unionWith.
- */
+// Tablas de comparticion: mezclan carpetas y archivos ($unionWith).
 
 /** Reporte 6 — Recursos compartidos con mas usuarios. */
 @Component({

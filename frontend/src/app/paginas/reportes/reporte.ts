@@ -13,17 +13,13 @@ import { DefinicionReporte, Filtro, REPORTES } from './catalogo';
 
 const LIMITE_PAGINA = 20;
 
-/** Fecha local en formato AAAA-MM-DD (el que usan <input type="date"> y la API). */
+// AAAA-MM-DD en hora local
 function fechaLocal(fecha: Date): string {
   const dosDigitos = (n: number) => String(n).padStart(2, '0');
   return `${fecha.getFullYear()}-${dosDigitos(fecha.getMonth() + 1)}-${dosDigitos(fecha.getDate())}`;
 }
 
-/**
- * Vista de UN reporte (/reportes/:clave): sus filtros y su tabla. Que
- * filtros mostrar y que tabla usar sale del catalogo, asi los 14 reportes
- * comparten esta pantalla sin un @switch de doce casos.
- */
+// Una sola pantalla para todos los reportes; los filtros y la tabla salen del catalogo.
 @Component({
   selector: 'app-reporte',
   imports: [FormsModule, RouterLink, NgComponentOutlet, AccionPipe],
@@ -43,17 +39,16 @@ export class ReportePagina {
   private readonly usuariosApi = inject(UsuariosApi);
   readonly esAdministrador = inject(Autenticacion).esAdministrador;
 
-  /** :clave de la ruta (withComponentInputBinding). */
   readonly clave = input.required<string>();
 
   readonly definicion = computed(() => REPORTES.find((r) => r.clave === this.clave()) ?? null);
-  /** Un usuario normal que escribe a mano la URL de un reporte de administrador. */
+  // Si un usuario normal escribe la URL de un reporte de administrador.
   readonly prohibido = computed(() => !!this.definicion()?.soloAdmin && !this.esAdministrador());
 
   readonly acciones = ACCIONES;
   readonly usuarios = signal<Usuario[]>([]);
 
-  // Valores de los filtros. Cada reporte usa solo los que declara en el catalogo.
+  // Cada reporte usa solo los filtros que declara.
   readonly desde = signal('');
   readonly hasta = signal('');
   readonly extension = signal('');
@@ -67,11 +62,7 @@ export class ReportePagina {
   readonly excluirSesion = signal(false);
   readonly contar = signal('directos');
 
-  /**
-   * La respuesta va junto a la clave del reporte que la pidio: al cambiar de
-   * reporte, la tabla nueva no llega a recibir los datos del anterior (que
-   * tienen otra forma) mientras se carga la suya.
-   */
+  // Se guarda la clave para no pasarle a una tabla los datos del reporte anterior.
   readonly resultado = signal<{ clave: string; datos: unknown } | null>(null);
   readonly pagina = signal(1);
   readonly cargando = signal(false);
@@ -90,8 +81,7 @@ export class ReportePagina {
   });
 
   constructor() {
-    // Al entrar a un reporte (o pasar de uno a otro, que reutiliza este
-    // componente): filtros a sus valores por defecto y primera consulta.
+    // Al cambiar de reporte: reiniciar filtros y consultar.
     effect(() => {
       const definicion = this.definicion();
       untracked(() => {
@@ -109,7 +99,7 @@ export class ReportePagina {
   usa(filtro: Filtro): boolean {
     const definicion = this.definicion();
     if (!definicion?.filtros.includes(filtro)) return false;
-    // Elegir usuario es solo del administrador; el normal siempre ve el suyo.
+    // Solo el administrador elige usuario.
     return filtro !== 'usuario' || this.esAdministrador();
   }
 
@@ -134,7 +124,6 @@ export class ReportePagina {
     this.usuariosApi.listar().subscribe({ next: (u) => this.usuarios.set(u) });
   }
 
-  /** Solo los filtros que el reporte declara; los vacios no se envian. */
   private parametros(pagina: number) {
     const definicion = this.definicion()!;
     const usa = (f: Filtro) => this.usa(f);
@@ -166,7 +155,6 @@ export class ReportePagina {
         this.pagina.set(pagina);
         this.cargando.set(false);
       },
-      // El mensaje de la API (p. ej. "desde no puede ser posterior a hasta").
       error: (e) => {
         this.error.set(mensajeDeError(e));
         this.cargando.set(false);

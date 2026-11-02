@@ -1,7 +1,7 @@
 import { Component, ElementRef, input, OnInit, output, signal, viewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-/** Pide un nombre: crear carpeta y renombrar. El error lo muestra el padre (viene de la API). */
+// Para crear carpetas y renombrar.
 @Component({
   selector: 'app-dialogo-nombre',
   imports: [FormsModule],
@@ -40,8 +40,7 @@ export class DialogoNombre implements OnInit {
 
   ngOnInit() {
     this.nombre.set(this.valorInicial());
-    // Al renombrar se selecciona el nombre SIN la extension, que es lo que
-    // normalmente se cambia (la API no permite cambiar la extension).
+    // Selecciona el nombre sin la extension, que no se puede cambiar.
     setTimeout(() => {
       const campo = this.campo()?.nativeElement;
       if (!campo) return;

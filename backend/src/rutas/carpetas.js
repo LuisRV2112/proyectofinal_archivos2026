@@ -13,7 +13,7 @@ const router = Router();
 
 router.use(autenticar);
 
-// Va antes de /:id para que "raiz" no se interprete como un id.
+// Antes de /:id para que "raiz" no se tome como id.
 router.get('/raiz', async (req, res) => {
   res.json(await listarRaiz(req.usuario, req.query));
 });
@@ -37,7 +37,7 @@ router.patch('/:id/mover', async (req, res) => {
   res.json(await moverCarpeta(req.params.id, req.body, req.usuario));
 });
 
-// A la papelera junto con todo su subarbol
+// A la papelera con su subarbol
 router.delete('/:id', async (req, res) => {
   res.json(await enviarCarpetaAPapelera(req.params.id, req.usuario));
 });

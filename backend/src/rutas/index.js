@@ -10,11 +10,9 @@ import rutasPapelera from './papelera.js';
 import rutasReportes from './reportes.js';
 import rutasActividad from './actividad.js';
 
-/** Todas las rutas de la API; app.js las monta bajo /api. */
 const router = Router();
 
-// Publica: la usan el frontend y los scripts para saber si la API esta lista.
-// 503 si MongoDB no responde, para que un monitor lo detecte por el codigo.
+// Publica. 503 si MongoDB no responde.
 router.get('/salud', async (_req, res) => {
   const salud = await obtenerSalud();
   res.status(salud.mongodb.responde ? 200 : 503).json(salud);

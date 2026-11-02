@@ -1,22 +1,8 @@
-/**
- * Carga inicial: `npm run seed`.
- *
- * En vez de insertar documentos ya armados, REPRODUCE la linea de tiempo de
- * datos.js: crea usuarios, carpetas y archivos, los comparte, los descarga, los
- * mueve y los manda a la papelera en orden cronologico, aplicando en cada paso
- * las mismas reglas de negocio que tendra la API. Cada operacion deja su
- * entrada en `actividad` con su fecha simulada.
- *
- * Asi la consistencia no depende de haber escrito bien cada dato a mano:
- *  - `ancestros` y `ruta` se calculan siempre a partir del padre real.
- *  - `tamano` lo devuelve GridFS al subir el contenido.
- *  - `almacenamientoUsado` se suma y resta en cada operacion y al final se
- *    recalcula con una agregacion para comprobar que cuadra.
- *  - Una operacion imposible (descargar sin permiso, hermanos con el mismo
- *    nombre, mover creando un ciclo) detiene la carga con un error.
- *
- * Es repetible: vacia las colecciones y GridFS antes de cargar.
- */
+// npm run seed. No inserta documentos armados: reproduce la linea de tiempo
+// de datos.js aplicando las mismas reglas que la API, y cada operacion deja
+// su entrada en actividad. Asi ancestros, ruta, tamano y almacenamientoUsado
+// salen calculados y no escritos a mano.
+// Vacia la base antes de cargar, se puede repetir.
 import 'dotenv/config';
 import bcrypt from 'bcrypt';
 import mongoose from 'mongoose';
@@ -28,22 +14,17 @@ import {
   USUARIOS, CARPETAS, ARCHIVOS, LINEA_DE_TIEMPO, CONTRASENA_PRUEBA, INICIO_SIMULACION, FIN_SIMULACION,
 } from './datos.js';
 
-// Los indices se crean de forma explicita despues de vaciar (ver vaciarBase).
-// Con autoIndex activo, Mongoose los lanzaria al conectar y competirian con el
-// borrado de las colecciones.
+// Los indices se crean despues de vaciar, no al conectar.
 mongoose.set('autoIndex', false);
 
 const COSTO_BCRYPT = 10;
-// Guatemala esta en UTC-6 todo el ano (sin horario de verano).
+// Guatemala: UTC-6 todo el ano.
 const DESFASE_UTC_HORAS = 6;
 const JORNADA = { inicioMinutos: 8 * 60, duracionMinutos: 9.5 * 60 }; // 8:00 a 17:30
 
-// ---------------------------------------------------------------------------
 // Utilidades de la simulacion
-// ---------------------------------------------------------------------------
 
-// Generador pseudoaleatorio con semilla fija (mulberry32): las horas varian de
-// forma natural pero el seed produce exactamente lo mismo en cada ejecucion.
+// Semilla fija (mulberry32): cada ejecucion da los mismos datos.
 function crearAleatorio(semilla) {
   let estado = semilla >>> 0;
   return () => {
@@ -60,11 +41,7 @@ function fechaGuatemala(anio, mes, dia, minutosDelDia) {
   return new Date(Date.UTC(anio, mes, dia, DESFASE_UTC_HORAS, minutosDelDia));
 }
 
-/**
- * Reparte `cantidad` operaciones dentro del horario laboral del mes,
- * conservando su orden: el tiempo laboral disponible se divide en tramos
- * iguales y cada operacion cae en un punto al azar de su tramo.
- */
+// Reparte las operaciones en el horario laboral del mes sin cambiar su orden.
 function repartirEnMes(mesTexto, cantidad) {
   const [anio, mes] = mesTexto.split('-').map(Number);
   const inicio = new Date(`${INICIO_SIMULACION}T00:00:00Z`);
@@ -95,9 +72,7 @@ const diaGuatemala = (fecha) => new Date(fecha.getTime() - DESFASE_UTC_HORAS * 3
 
 class ErrorSimulacion extends Error {}
 
-// ---------------------------------------------------------------------------
 // Estado de la simulacion
-// ---------------------------------------------------------------------------
 
 const usuarios = new Map(); // username -> documento Usuario
 const carpetas = new Map(); // clave (ruta final) -> documento Carpeta
@@ -135,10 +110,7 @@ function registrar(actor, accion, recursoTipo, recurso, detalle, fecha) {
   });
 }
 
-/**
- * Un usuario inicia sesion la primera vez que actua en un dia: la entrada de
- * LOGIN queda unos minutos antes de su primera operacion de ese dia.
- */
+// LOGIN unos minutos antes de la primera operacion del dia.
 function registrarLoginSiCorresponde(actor, fecha) {
   const dia = diaGuatemala(fecha);
   if (ultimoLogin.get(actor.username) === dia) return;
@@ -155,7 +127,6 @@ function registrarLoginSiCorresponde(actor, fecha) {
   });
 }
 
-/** Rechaza un nombre que ya usa un hermano no eliminado (regla 5.1 y 5.5). */
 function validarNombreLibre(coleccion, campoPadre, padreId, propietarioId, nombre, excluirId) {
   const choca = [...coleccion.values()].some(
     (d) =>
@@ -168,12 +139,7 @@ function validarNombreLibre(coleccion, campoPadre, padreId, propietarioId, nombr
   if (choca) throw new ErrorSimulacion(`Ya existe "${nombre}" en esa carpeta`);
 }
 
-/**
- * Nivel con que `actor` accede a un archivo, o null si no tiene acceso. Mismas
- * reglas que tendra la API (seccion 5.2): propietario, permiso directo,
- * permiso heredado de una carpeta ancestro, o administrador. Si llega por
- * varias vias gana el nivel mas alto.
- */
+// Mismas reglas de acceso que servicios/permisos.js.
 function nivelDeAcceso(actor, arch) {
   if (arch.propietarioId.equals(actor._id)) return 'PROPIETARIO';
   const candidatos = [];
@@ -191,13 +157,10 @@ function nivelDeAcceso(actor, arch) {
   return null;
 }
 
-// Todos los saves llevan timestamps:false: las fechas son las de la
-// simulacion, no la hora en que corre el script.
+// timestamps:false para usar las fechas simuladas.
 const guardar = (documento) => documento.save({ timestamps: false });
 
-// ---------------------------------------------------------------------------
 // Operaciones
-// ---------------------------------------------------------------------------
 
 const operaciones = {
   async CREAR_USUARIO(op, fecha) {
@@ -219,7 +182,6 @@ const operaciones = {
       nombre,
       propietarioId: propietario._id,
       padreId: padre?._id ?? null,
-      // Array of Ancestors: los del padre mas el propio padre.
       ancestros: padre ? [...padre.ancestros, padre._id] : [],
       ruta: padre ? `${padre.ruta}/${nombre}` : `/${nombre}`,
       creadoEn: fecha,
@@ -240,14 +202,13 @@ const operaciones = {
     const extension = extensionDe(nombre);
     validarNombreLibre(archivos, 'carpetaId', destino?._id, propietario._id, nombre);
 
-    // El contenido va a GridFS; el tamano que se guarda es el que GridFS
-    // reporta, no uno calculado aparte.
+    // El tamano es el que reporta GridFS.
     const contenido = Buffer.from(especificacion.contenido(), 'utf8');
     const { gridfsId, tamano } = await subirContenido(contenido, nombre, {
       propietarioId: propietario._id,
       mimeType: MIME_POR_EXTENSION[extension],
     });
-    // GridFS sella uploadDate con la hora real; se alinea con la simulada.
+    // uploadDate con la fecha simulada.
     await mongoose.connection.db
       .collection(`${NOMBRE_BUCKET}.files`)
       .updateOne({ _id: gridfsId }, { $set: { uploadDate: fecha } });
@@ -259,7 +220,6 @@ const operaciones = {
       tamano,
       propietarioId: propietario._id,
       carpetaId: destino?._id ?? null,
-      // Ancestros de la carpeta mas la propia carpeta (ver modelo Archivo).
       ancestros: destino ? [...destino.ancestros, destino._id] : [],
       gridfsId,
       etiquetas: especificacion.etiquetas,
@@ -286,7 +246,6 @@ const operaciones = {
     arch.nombre = nuevoNombre;
     arch.actualizadoEn = fecha;
     await guardar(arch);
-    // El filename de contenido.files se mantiene igual al nombre visible.
     await obtenerBucket().rename(arch.gridfsId, nuevoNombre);
     registrar(propietario, 'RENOMBRAR', 'ARCHIVO', arch, `De "${anterior}" a "${nuevoNombre}"`, fecha);
     return propietario;
@@ -314,8 +273,7 @@ const operaciones = {
     const claveDestino = carpetaPadreDe(op.clave);
     const destino = claveDestino ? carpeta(claveDestino) : null;
 
-    // Sin ciclos (regla 5.1): no se puede mover una carpeta dentro de si misma
-    // ni de una de sus descendientes.
+    // Sin ciclos.
     if (destino && (destino._id.equals(movida._id) || destino.ancestros.some((id) => id.equals(movida._id)))) {
       throw new ErrorSimulacion(`Mover "${movida.ruta}" a "${destino.ruta}" crearia un ciclo`);
     }
@@ -325,8 +283,7 @@ const operaciones = {
     const ancestrosNuevos = destino ? [...destino.ancestros, destino._id] : [];
     const rutaNueva = destino ? `${destino.ruta}/${movida.nombre}` : `/${movida.nombre}`;
 
-    // Reemplaza el tramo de ancestros que va "por encima" de la carpeta movida
-    // y conserva el que va desde ella hacia abajo.
+    // Cambia el tramo de ancestros por encima de la carpeta movida.
     const reubicar = (ancestros) => {
       const posicion = ancestros.findIndex((id) => id.equals(movida._id));
       return [...ancestrosNuevos, ...ancestros.slice(posicion)];
@@ -338,7 +295,7 @@ const operaciones = {
     movida.actualizadoEn = fecha;
     await guardar(movida);
 
-    // Es el precio del patron Array of Ancestors: todo el subarbol se reescribe.
+    // Se reescribe todo el subarbol.
     let afectados = 0;
     for (const sub of carpetas.values()) {
       if (!sub.ancestros.some((id) => id.equals(movida._id))) continue;
@@ -407,8 +364,7 @@ const operaciones = {
     const propietario = usuario(propietarioDeArchivo(op.clave));
     if (arch.eliminado.estado) throw new ErrorSimulacion(`"${arch.nombre}" ya esta en la papelera`);
 
-    // No se borra: se marca, y se recuerda la carpeta para poder restaurarlo.
-    // El almacenamiento NO se libera (regla 5.4).
+    // Solo se marca; el espacio no se libera.
     const origen = [...carpetas.values()].find((c) => c._id.equals(arch.carpetaId));
     arch.eliminado = { estado: true, fecha, eliminadoPor: propietario._id, padreOriginalId: arch.carpetaId };
     arch.actualizadoEn = fecha;
@@ -421,8 +377,7 @@ const operaciones = {
     const raiz = carpeta(op.clave);
     const propietario = usuario(CARPETAS[op.clave]);
 
-    // Papelera en cascada (regla 5.3): la carpeta y todo su subarbol, que sale
-    // de los `ancestros` sin recorrer el arbol.
+    // En cascada con todo el subarbol.
     const marcar = async (documento, padreOriginalId) => {
       documento.eliminado = { estado: true, fecha, eliminadoPor: propietario._id, padreOriginalId };
       documento.actualizadoEn = fecha;
@@ -450,7 +405,7 @@ const operaciones = {
     const propietario = usuario(propietarioDeArchivo(op.clave));
     if (!arch.eliminado.estado) throw new ErrorSimulacion(`"${arch.nombre}" no esta en la papelera`);
 
-    // Vuelve a su carpeta original si sigue disponible; si no, a la raiz.
+    // A su carpeta original o a la raiz.
     const original = [...carpetas.values()].find((c) => c._id.equals(arch.eliminado.padreOriginalId));
     const destino = original && !original.eliminado.estado ? original : null;
     arch.carpetaId = destino?._id ?? null;
@@ -467,22 +422,19 @@ const operaciones = {
     const propietario = usuario(propietarioDeArchivo(op.clave));
     if (!arch.eliminado.estado) throw new ErrorSimulacion('Solo se elimina definitivamente desde la papelera');
 
-    // Borra contenido y metadatos, y ahora si libera el espacio.
+    // Ahora si se libera el espacio.
     await eliminarContenido(arch.gridfsId);
     await Archivo.deleteOne({ _id: arch._id });
     archivos.delete(op.clave);
     propietario.almacenamientoUsado -= arch.tamano;
     await guardar(propietario);
-    // recursoId queda apuntando a un documento que ya no existe: por eso la
-    // entrada guarda tambien el nombre.
+    // recursoNombre mantiene legible la entrada.
     registrar(propietario, 'ELIMINAR_DEFINITIVO', 'ARCHIVO', arch, `Liberados ${formatearBytes(arch.tamano)}`, fecha);
     return propietario;
   },
 };
 
-// ---------------------------------------------------------------------------
 // Pasos de la carga
-// ---------------------------------------------------------------------------
 
 async function vaciarBase() {
   const db = mongoose.connection.db;
@@ -491,7 +443,6 @@ async function vaciarBase() {
   for (const nombre of aBorrar) {
     if (existentes.has(nombre)) await db.dropCollection(nombre);
   }
-  // Recrea las colecciones con los indices declarados en los esquemas.
   for (const modelo of [Usuario, Carpeta, Archivo, Actividad]) {
     await modelo.createCollection();
     await modelo.syncIndexes();
@@ -510,8 +461,7 @@ async function crearUsuario(datos, fecha) {
 }
 
 async function reproducirLineaDeTiempo() {
-  // El administrador existe desde el arranque del sistema: es quien crea al
-  // resto, asi que no tiene entrada de creacion en el historial.
+  // El administrador ya existe; no tiene entrada de creacion.
   const datosAdmin = USUARIOS.find((u) => u.rol === 'ADMINISTRADOR');
   const [anio, mes, dia] = INICIO_SIMULACION.split('-').map(Number);
   await crearUsuario(datosAdmin, fechaGuatemala(anio, mes - 1, dia, 7 * 60 + 30));
@@ -522,8 +472,7 @@ async function reproducirLineaDeTiempo() {
     for (const [i, op] of lista.entries()) {
       const ejecutar = operaciones[op.tipo];
       if (!ejecutar) throw new ErrorSimulacion(`Operacion desconocida: ${op.tipo}`);
-      // El login se registra antes de ejecutar, con el actor que hara la
-      // operacion (que se conoce de antemano para no alterar el orden).
+      // Login antes de la operacion.
       registrarLoginSiCorresponde(actorDe(op), fechas[i]);
       try {
         await ejecutar(op, fechas[i]);
@@ -537,23 +486,17 @@ async function reproducirLineaDeTiempo() {
   return total;
 }
 
-// Quien ejecuta la operacion: el indicado (descargas, acciones del admin) o,
-// si no, el propietario del recurso.
+// El actor indicado o, si no hay, el propietario.
 function actorDe(op) {
   if (op.actor) return usuario(op.actor);
   const esDeCarpeta = ['CREAR_CARPETA', 'MOVER_CARPETA', 'ELIMINAR_CARPETA'].includes(op.tipo) || op.recursoTipo === 'CARPETA';
   return usuario(esDeCarpeta ? CARPETAS[op.clave] : propietarioDeArchivo(op.clave));
 }
 
-/**
- * Recalcula `almacenamientoUsado` con una agregacion y lo compara con el valor
- * que se fue manteniendo operacion a operacion. Si no coinciden, la logica de
- * suma/resta tiene un error, y se detiene la carga.
- */
+// Compara almacenamientoUsado con una agregacion; si no cuadra, se detiene.
 async function recalcularAlmacenamiento() {
   const sumas = await Archivo.aggregate([
-    // Todos los archivos que existen, incluidos los de la papelera: la
-    // papelera no libera espacio, solo la eliminacion definitiva.
+    // La papelera tambien cuenta.
     { $group: { _id: '$propietarioId', bytes: { $sum: '$tamano' } } },
   ]);
   const porUsuario = new Map(sumas.map((s) => [String(s._id), s.bytes]));

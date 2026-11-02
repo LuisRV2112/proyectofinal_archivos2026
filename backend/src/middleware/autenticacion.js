@@ -1,11 +1,8 @@
 import { usuarioDesdeToken } from '../servicios/autenticacion.js';
 import { ErrorNoAutenticado, ErrorProhibido } from '../utilidades/errores.js';
 
-/**
- * Exige `Authorization: Bearer <token>` y deja el usuario en `req.usuario`.
- * Express 5 propaga solo los errores de los middleware async, asi que basta
- * con lanzar: el middleware de errores responde 401.
- */
+// Lee el Bearer token y deja el usuario en req.usuario.
+// Express 5 pasa los errores async al manejador, basta con lanzar.
 export async function autenticar(req, _res, next) {
   const cabecera = req.get('Authorization') ?? '';
   const [esquema, token] = cabecera.split(' ');
@@ -16,11 +13,7 @@ export async function autenticar(req, _res, next) {
   next();
 }
 
-/**
- * Restringe una ruta a ciertos roles. Va despues de `autenticar`.
- * Responde 403 (no 401): el usuario si esta identificado, pero su rol no
- * alcanza.
- */
+// Va despues de autenticar. 403 porque ya se sabe quien es.
 export function exigirRol(...roles) {
   return (req, _res, next) => {
     if (!req.usuario) throw new ErrorNoAutenticado();

@@ -3,7 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { URL_API } from '../nucleo/configuracion';
 import { ElementoPapelera, Papelera, ResultadoEliminacionDefinitiva, ResultadoRestaurar } from '../nucleo/modelos';
 
-/** Llamadas de la papelera; la API usa "carpetas" | "archivos" en la ruta. */
+// La ruta usa "carpetas" o "archivos".
 @Injectable({ providedIn: 'root' })
 export class PapeleraApi {
   private readonly http = inject(HttpClient);

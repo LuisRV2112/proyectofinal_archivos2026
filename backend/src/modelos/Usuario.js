@@ -4,18 +4,14 @@ const { Schema } = mongoose;
 
 export const ROLES = ['ADMINISTRADOR', 'USUARIO'];
 
-// Cuota de una cuenta nueva si el administrador no indica otra. 20 MB
-// alcanzan para cientos de documentos .txt/.md (el seed usa unos 18 KB por
-// usuario) y a la vez es un limite que se puede alcanzar en una demostracion.
+// 20 MB alcanza para cientos de .txt/.md y se puede llenar en una demo.
 export const CUOTA_POR_DEFECTO = 20 * 1024 * 1024;
-// Tope de lo que el administrador puede asignar: evita un valor absurdo por un
-// error de tipeo (p. ej. bytes escritos como si fueran MB).
+// Tope para evitar errores de tipeo del administrador.
 export const CUOTA_MAXIMA = 10 * 1024 * 1024 * 1024;
 
 const esquemaUsuario = new Schema(
   {
-    // `unique` en el campo crea el indice unico {username: 1}, que es el que
-    // usa el login para encontrar al usuario.
+    // unique crea el indice {username: 1} que usa el login.
     username: {
       type: String,
       required: [true, 'El nombre de usuario es obligatorio'],
@@ -26,7 +22,6 @@ const esquemaUsuario = new Schema(
       maxlength: [30, 'El nombre de usuario no puede superar 30 caracteres'],
       match: [/^[a-z0-9._-]+$/, 'El nombre de usuario solo admite letras, numeros, punto, guion y guion bajo'],
     },
-    // Indice unico {email: 1}: dos cuentas no pueden compartir correo.
     email: {
       type: String,
       required: [true, 'El correo es obligatorio'],
@@ -35,10 +30,7 @@ const esquemaUsuario = new Schema(
       lowercase: true,
       match: [/^[^\s@]+@[^\s@]+\.[^\s@]+$/, 'El correo no tiene un formato valido'],
     },
-    // Hash de bcrypt, nunca la contrasena. `select: false` hace que ninguna
-    // consulta lo traiga salvo que se pida a proposito con
-    // .select('+passwordHash'), que solo hace el login. Asi no puede salir en
-    // una respuesta de la API por descuido.
+    // bcrypt. select: false para que solo lo traiga el login con +passwordHash.
     passwordHash: { type: String, required: true, select: false },
     nombreCompleto: {
       type: String,
@@ -51,20 +43,13 @@ const esquemaUsuario = new Schema(
       enum: { values: ROLES, message: 'Rol no valido: {VALUE}' },
       default: 'USUARIO',
     },
-    // Desactivar no borra: el usuario deja de poder entrar, pero sus
-    // documentos y su historial se conservan.
+    // Desactivar no borra sus documentos ni su historial.
     activo: { type: Boolean, default: true },
-    // Bytes ocupados por sus archivos. DENORMALIZADO a proposito (Computed
-    // Pattern): calcularlo con una agregacion sobre `archivos` en cada consulta
-    // seria costoso, y el dato se pide a menudo (perfil, reportes). Se mantiene
-    // al dia sumando en cada subida y restando en cada eliminacion definitiva.
-    // Enviar a la papelera NO lo libera: el archivo sigue ocupando espacio.
+    // Denormalizado (Computed Pattern) para no sumar archivos en cada consulta.
+    // Sube al subir y baja al eliminar definitivo; la papelera no lo libera.
     almacenamientoUsado: { type: Number, default: 0, min: 0 },
-    // Bytes ASIGNADOS al usuario: subir un archivo que no cabe se rechaza.
-    // Lo fija el administrador. El espacio DISPONIBLE no se guarda: es
-    // cuota - usado, y guardarlo seria un segundo dato denormalizado que
-    // habria que mantener sincronizado en cada subida y eliminacion. Se expone
-    // con el virtual `almacenamientoDisponible`.
+    // Espacio asignado por el administrador. El disponible no se guarda,
+    // se calcula con el virtual almacenamientoDisponible.
     cuotaAlmacenamiento: {
       type: Number,
       default: CUOTA_POR_DEFECTO,
@@ -74,15 +59,12 @@ const esquemaUsuario = new Schema(
     },
   },
   {
-    // Solo `creadoEn`: el modelo no define fecha de actualizacion del usuario.
     timestamps: { createdAt: 'creadoEn', updatedAt: false },
-    // `virtuals` para que almacenamientoDisponible viaje en las respuestas;
-    // `id: false` para no duplicar `_id` como `id`.
+    // virtuals para enviar almacenamientoDisponible; id: false para no duplicar _id.
     id: false,
     toJSON: {
       virtuals: true,
-      // Segunda barrera ademas de `select: false`: aunque alguien cargue el
-      // hash, nunca se serializa.
+      // Por si se cargo el hash, nunca se envia.
       transform(_documento, objeto) {
         delete objeto.passwordHash;
         delete objeto.__v;
@@ -92,13 +74,10 @@ const esquemaUsuario = new Schema(
   }
 );
 
-// Nunca negativo: si el administrador baja la cuota por debajo de lo usado
-// (no lo permite la API, pero podria pasar editando la base), simplemente no
-// queda espacio.
+// Nunca negativo aunque la cuota quede por debajo de lo usado.
 esquemaUsuario.virtual('almacenamientoDisponible').get(function () {
   return Math.max(0, this.cuotaAlmacenamiento - this.almacenamientoUsado);
 });
 
-// Tercer argumento: nombre exacto de la coleccion, para no depender de la
-// pluralizacion automatica de Mongoose (que esta pensada para el ingles).
+// Nombre de coleccion explicito: la pluralizacion de Mongoose es en ingles.
 export const Usuario = mongoose.model('Usuario', esquemaUsuario, 'usuarios');
